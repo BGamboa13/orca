@@ -37,6 +37,7 @@ import {
   observeStructuredWorker,
   resolveStructuredWorkerIdentity,
   structuredWorkerAgent,
+  structuredWorkerSessionId,
   structuredWorkerTerminalState,
   type StructuredWorkerObservation
 } from '../../structured-worker-authority'
@@ -81,7 +82,8 @@ export async function stopStructuredWorker(
     'forgetStructuredSessionMail' | 'retireStructuredAgentSessionTabFromSnapshot'
   >
 ): Promise<StructuredWorkerStopOutcome> {
-  return closeStructuredAgentSessionChild(identity.sessionId, {
+  // The session doing the work: after `/clear` that is the successor, not the minted one.
+  return closeStructuredAgentSessionChild(structuredWorkerSessionId(identity), {
     ...(runtime ? { runtime } : {}),
     // Between the close and the proof, never after: an unsettled close returns early, and a
     // surviving redrive subscription keeps nudging a session no dispatch owns.
@@ -133,7 +135,7 @@ export async function readStructuredWorkerJournal(args: {
   cursor?: string | number
   limit?: number
 }): Promise<OrchestrationWorkerReadTranscriptResult> {
-  const page = await readStructuredJournalPage(args.identity.sessionId)
+  const page = await readStructuredJournalPage(structuredWorkerSessionId(args.identity))
   if (!page) {
     throw new OrchestrationError(
       'transcript_required',
@@ -220,7 +222,7 @@ export async function captureStructuredWorkerArchive(
 ): Promise<WorkerStructuredJournalArchive> {
   // Opens a conversation at rest or one the idle sweep closed, so a resting worker's journal is
   // still preserved.
-  const page = await readStructuredJournalPage(identity.sessionId)
+  const page = await readStructuredJournalPage(structuredWorkerSessionId(identity))
   if (page) {
     return buildStructuredJournalArchive({
       agent,
