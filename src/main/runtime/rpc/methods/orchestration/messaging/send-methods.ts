@@ -206,6 +206,7 @@ export const ORCHESTRATION_SEND_METHODS = [
           senderPaneKey,
           legacyCoordinatorRunId,
           orchestrationCapability,
+          callerOrcaSessionId: orchestrationCaller?.orcaSessionId ?? null,
           resolveProcessIncarnation: () =>
             attestedCaller?.processIncarnation ??
             runtime.getTerminalProcessIncarnation(from) ??

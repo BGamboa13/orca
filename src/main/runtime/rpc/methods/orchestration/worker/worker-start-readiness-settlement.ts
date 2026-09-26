@@ -3,6 +3,8 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { RunRow, TaskRow } from '../../../../orchestration/types'
 import type { WorkerStartModeReceipt } from '../../orchestration-worker-start-mode'
 import { deliverWorkerDispatchPreamble } from './deliver-worker-dispatch-preamble'
+import { waitForDispatchPreambleTurn } from '../../../../orchestration/dispatch-preamble-turn'
+import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../../../../../shared/orchestration-timing-budgets'
 import type { OrchestrationWorkerLaunchReceipt } from './worker-launch-preferences'
 import {
   describeUnobservedWorkerTurnStart,
@@ -59,8 +61,10 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     coordinatorHandle: args.coordinatorHandle,
     dispatchCapability: args.dispatchCapability,
     devMode: args.devMode,
-    requestId: args.requestId
+    requestId: args.requestId,
+    runId: run.id
   })
+  const promptDelivery = delivery.prompt
   effects.push({
     kind: 'dispatch_input',
     role: 'agent',
@@ -73,10 +77,20 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   // evidence the receipt claims is observable. A worker whose turn never starts must not be
   // reported ready — a wedged agent and a working one looked identical before this gate.
   // A structured preamble send is its own evidence: acknowledged, or still held for its agent.
-  const promptDelivery = delivery.prompt
+  // A chat's preamble turn starts once its provider accepts it, which a busy chat defers.
   const turnStart: WorkerTurnStartObservation =
     delivery.structuredTurnStart ??
-    (await observeWorkerTurnStart({ runtime, terminalHandle, prompt: promptDelivery }))
+    (delivery.preambleTurnMessageId
+      ? {
+          verdict: (await waitForDispatchPreambleTurn(
+            db,
+            delivery.preambleTurnMessageId,
+            AGENT_PROMPT_EFFECT_TIMEOUT_MS
+          ))
+            ? 'observed'
+            : 'unobserved'
+        }
+      : await observeWorkerTurnStart({ runtime, terminalHandle, prompt: promptDelivery }))
   const deliveredPrompt = turnStart.prompt ?? promptDelivery
   monitorWorkerSetup({
     runtime,

@@ -82,6 +82,10 @@ function harness(options: {
   /** The coordinator of this worker's Run is mid-batch: it checked and has not acked yet. */
   outstandingRunDelivery?: boolean
   outstandingOwnDelivery?: boolean
+  /** Undelivered unread rows on the mailbox, oldest first. */
+  unreadIds?: string[]
+  /** Full rows instead, when their type and body matter. */
+  unread?: { id: string; type: string; body: string }[]
   /** The mailbox this worker owns; its own handle for direct peer mail outside a dispatch. */
   mailbox?: string
   dispatchId?: string | null
@@ -97,14 +101,20 @@ function harness(options: {
     state: options.dispatchState ?? ('accepted' as const)
   }))
   const sendMock = vi.mocked(send)
+  const markAsReadAndDelivered = vi.fn()
   const stored = new Map<string, StructuredPointerOperationRow>()
   const db = {
     getDispatchContextById: () => ({ run_id: 'run_1' }),
     hasOutstandingMailboxDelivery: (handle: string) =>
       ((options.outstandingRunDelivery ?? false) && handle.startsWith('run:')) ||
       ((options.outstandingOwnDelivery ?? false) && !handle.startsWith('run:')),
-    getUndeliveredUnreadMessages: () => [{ id: 'm1', type: 'status', sequence: 3 }],
+    getUndeliveredUnreadMessages: () =>
+      (
+        options.unread ??
+        (options.unreadIds ?? ['m1']).map((id) => ({ id, type: 'status', body: '' }))
+      ).map((message, index) => ({ ...message, sequence: index + 3 })),
     markAsDelivered,
+    markAsReadAndDelivered,
     getStructuredPointerOperation: (key: string) => stored.get(key),
     putStructuredPointerOperation: (row: StructuredPointerOperationRow) =>
       stored.set(row.mailbox_handle, row),
@@ -126,6 +136,7 @@ function harness(options: {
   return {
     delivery,
     markAsDelivered,
+    markAsReadAndDelivered,
     send: sendMock,
     stored,
     setJournal: (next: AgentJournalRenderItem[] | null) => {
@@ -533,5 +544,67 @@ describe('forgetting one settled worker', () => {
     delivery.onJournalActivity('session-1')
     await flush()
     expect(send).not.toHaveBeenCalled()
+  })
+})
+
+describe("a chat assignee's dispatch preamble", () => {
+  const PREAMBLE = { id: 'm_preamble', type: 'dispatch', body: 'You are a dispatched worker.' }
+  const FOLLOW_UP = { id: 'm_follow', type: 'status', body: 'also this' }
+
+  it('goes alone, as its own body, and the accepted turn is its reading', async () => {
+    const h = harness({ journal: idleJournal(), unread: [PREAMBLE, FOLLOW_UP] })
+    h.delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(h.send).toHaveBeenCalledTimes(1)
+    expect(h.send.mock.calls[0]![0].body.blocks).toEqual([{ type: 'text', text: PREAMBLE.body }])
+    expect(h.markAsReadAndDelivered).toHaveBeenCalledWith([PREAMBLE.id])
+    expect(h.markAsDelivered).not.toHaveBeenCalled()
+  })
+
+  it('is read once a send the lane stopped waiting on is echoed, sending nothing more', async () => {
+    const h = harness({ journal: idleJournal(), unread: [PREAMBLE], dispatchState: 'unknown' })
+    h.delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(h.markAsReadAndDelivered).not.toHaveBeenCalled()
+    const first = h.send.mock.calls[0]![0].operationId
+    h.setSubmissions([{ clientMessageId: first, dispatchState: 'accepted', submittedAt: Date.now() }])
+    h.delivery.onJournalActivity(IDENTITY.sessionId)
+    await flush()
+    expect(h.send).toHaveBeenCalledTimes(1)
+    expect(h.markAsReadAndDelivered).toHaveBeenCalledWith([PREAMBLE.id])
+  })
+
+  it('replays a failed send under its own id, and goes again only after a later turn runs', async () => {
+    const h = harness({ journal: idleJournal(), unread: [PREAMBLE], dispatchState: 'rejected' })
+    h.delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    const first = h.send.mock.calls[0]![0].operationId
+    h.setSubmissions([{ clientMessageId: first, dispatchState: 'rejected', submittedAt: Date.now() }])
+    for (let edge = 0; edge < 3; edge++) {
+      h.delivery.onJournalActivity(IDENTITY.sessionId)
+      await flush()
+    }
+    // The host answers a recorded id from its ledger and starts nothing: no respawn loop.
+    expect(h.send.mock.calls.map(([input]) => input.operationId)).toEqual([first, first, first, first])
+    expect(h.markAsReadAndDelivered).not.toHaveBeenCalled()
+
+    h.setSubmissions([
+      { clientMessageId: first, dispatchState: 'rejected', submittedAt: Date.now() },
+      { clientMessageId: 'user-turn', dispatchState: 'accepted', submittedAt: Date.now() + 1 }
+    ])
+    h.delivery.onJournalActivity(IDENTITY.sessionId)
+    await flush()
+    expect(h.send.mock.calls.at(-1)![0].operationId).not.toBe(first)
+  })
+
+  it('waits out a running turn like any mail', async () => {
+    const h = harness({ journal: runningJournal(), unread: [PREAMBLE] })
+    h.delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(h.send).not.toHaveBeenCalled()
+    h.setJournal(idleJournal())
+    h.delivery.onJournalActivity(IDENTITY.sessionId)
+    await flush()
+    expect(h.send.mock.calls[0]![0].body.blocks).toEqual([{ type: 'text', text: PREAMBLE.body }])
   })
 })

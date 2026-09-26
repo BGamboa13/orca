@@ -10,6 +10,12 @@ import {
   resolveStructuredWorkerForDispatch
 } from '../../orchestration-structured-worker-lifecycle'
 import { structuredWorkerAddressable } from '../../../../structured-worker-custody'
+import { parseOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
+import {
+  observeStructuredSession,
+  structuredWorkerSessionId
+} from '../../../../structured-worker-authority'
+import { executingSessionId } from '../../../../orchestration/structured-session-lineage'
 import type {
   DispatchContextRow,
   FederatedDispatchRow,
@@ -59,7 +65,7 @@ export async function inspectWorkerTerminal(
     const observation = observeStructuredWorker(structured)
     const addressable = structuredWorkerAddressable(
       db,
-      structured.sessionId,
+      structuredWorkerSessionId(structured),
       db.getWorkerTerminalResourceByHandle?.(structured.handle)
     )
     return {
@@ -68,6 +74,20 @@ export async function inspectWorkerTerminal(
       status: exact ? observation.status : 'identity_changed',
       ...(exact && observation.reason ? { reason: observation.reason } : {}),
       ...(exact && addressable !== null ? { addressable } : {}),
+      terminalHandle: null
+    }
+  }
+  const chat = parseOrcaSessionAddress(terminalHandle)
+  if (chat) {
+    // A chat assignee is its address, which nothing re-points, so it is always the exact worker;
+    // its liveness is the session running it now. `agentWait` is absent as for any session.
+    await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+    const observation = observeStructuredSession(executingSessionId(chat))
+    return {
+      terminal: null,
+      exact: true,
+      status: observation.status,
+      ...(observation.reason ? { reason: observation.reason } : {}),
       terminalHandle: null
     }
   }

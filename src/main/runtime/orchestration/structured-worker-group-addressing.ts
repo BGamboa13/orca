@@ -15,14 +15,16 @@
  * the smaller shape instead, and nothing here has to invent a `worktreePath` or a `branch`.
  */
 
+import { parseOrcaSessionAddress } from '../../../shared/orca-session-address'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import { structuredWorkerAgent } from '../structured-worker-authority'
+import { structuredWorkerAgent, structuredWorkerSessionId } from '../structured-worker-authority'
 import { structuredWorkerAddressable } from '../structured-worker-custody'
 import {
   STRUCTURED_WORKER_INCARNATION_PREFIX,
   structuredWorkerIdentityFromRow
 } from '../structured-worker-identity'
 import type { OrchestrationDb } from './db'
+import { executingSessionId, readAgentSessionRecordStore } from './structured-session-lineage'
 import { readStructuredSessionGateFacts } from './structured-mailbox-pointer-host'
 
 /** The only facts group addressing reads off a recipient. */
@@ -55,7 +57,9 @@ export function listAddressableStructuredWorkers(
         return []
       }
       seen.add(identity.sessionId)
-      return structuredWorkerAddressable(db, identity.sessionId, row) === true ? [identity] : []
+      return structuredWorkerAddressable(db, structuredWorkerSessionId(identity), row) === true
+        ? [identity]
+        : []
     })
     .map((identity) => ({
       handle: identity.handle,
@@ -80,4 +84,16 @@ export async function structuredWorkerAgentStatus(sessionId: string): Promise<st
     return 'attention'
   }
   return facts.turnRunning ? 'working' : 'idle'
+}
+
+/** A chat assignee's agent, off its session record, so `@claude`/`@codex` match it as a pane. */
+export function chatAssigneeAgentIdentity(address: string): TuiAgent | undefined {
+  const chat = parseOrcaSessionAddress(address)
+  return chat ? readAgentSessionRecordStore()?.getRecord(chat)?.provider : undefined
+}
+
+/** A chat assignee's status for `@idle`, read off the session running it now. */
+export async function chatAssigneeAgentStatus(address: string): Promise<string | null> {
+  const chat = parseOrcaSessionAddress(address)
+  return chat ? await structuredWorkerAgentStatus(executingSessionId(chat)) : null
 }
