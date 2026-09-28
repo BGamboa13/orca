@@ -45,30 +45,33 @@ export function resolveExecutingSession(
   store: AgentSessionRecordReader,
   sessionId: string
 ): ExecutingSession {
-  try {
-    let head = sessionId
-    const later = new Set([sessionId])
-    let record = store.getRecord(head)
-    let next = record ? clearedInto(record) : null
-    while (record && next && !later.has(next)) {
-      later.add(next)
-      head = next
-      record = store.getRecord(head)
-      next = record ? clearedInto(record) : null
+  const read = (id: string): AgentSessionRecord | null => {
+    try {
+      return store.getRecord(id)
+    } catch (error) {
+      throw new OrchestrationError(
+        CODES.notLive,
+        `Agent session ${sessionId} cannot be verified: its session record could not be read (${error instanceof Error ? error.message : String(error)}). No effects were applied.`,
+        { effectsApplied: false }
+      )
     }
-    if (!record) {
-      return { kind: 'unrecorded', sessionId: head }
-    }
-    return structuredWorkerHostScope(record.location)
-      ? { kind: 'here', sessionId: head, record }
-      : { kind: 'other-host', sessionId: head, record }
-  } catch (error) {
-    throw new OrchestrationError(
-      CODES.notLive,
-      `Agent session ${sessionId} cannot be verified: its session record could not be read (${error instanceof Error ? error.message : String(error)}). No effects were applied.`,
-      { effectsApplied: false }
-    )
   }
+  let head = sessionId
+  const later = new Set([sessionId])
+  let record = read(head)
+  let next = record ? clearedInto(record) : null
+  while (record && next && !later.has(next)) {
+    later.add(next)
+    head = next
+    record = read(head)
+    next = record ? clearedInto(record) : null
+  }
+  if (!record) {
+    return { kind: 'unrecorded', sessionId: head }
+  }
+  return structuredWorkerHostScope(record.location)
+    ? { kind: 'here', sessionId: head, record }
+    : { kind: 'other-host', sessionId: head, record }
 }
 
 /** The typed refusal for a session another host runs; a caller here cannot act on it. */
