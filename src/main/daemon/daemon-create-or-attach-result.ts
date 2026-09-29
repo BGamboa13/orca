@@ -2,6 +2,7 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import type { ShellReadyState, TerminalSnapshot } from './types'
 import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { StartupDeliveryReport } from '../../shared/startup-delivery-report'
 
 export type DaemonCreateOrAttachResult = {
   isNew: boolean
@@ -20,6 +21,8 @@ export type DaemonCreateOrAttachResult = {
    * path proves nothing about the daemon's (#17696). Omitted by daemons predating this field.
    */
   cwdReadableByDaemon?: boolean
+  /** How the daemon typed this fresh spawn's startup command. Omitted by daemons before v37. */
+  startupDelivery?: StartupDeliveryReport
 }
 
 export function getDaemonSessionResultMetadata(session: {

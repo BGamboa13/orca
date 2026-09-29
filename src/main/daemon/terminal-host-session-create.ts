@@ -1,4 +1,9 @@
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
+import {
+  discardStagedStartupCommand,
+  stageStartupCommand,
+  type StartupCommandStaging
+} from '../../shared/startup-command-staging'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
 import { getDaemonSessionResultMetadata } from './daemon-create-or-attach-result'
 import { enumerateDirectoryOnce } from './directory-enumeration-probe'
@@ -131,6 +136,7 @@ async function spawnAndPublishSession(
     ...(opts.cancelSignal ? { cancelSignal: opts.cancelSignal } : {})
   })
 
+  let staging: StartupCommandStaging | undefined
   // Why: a fallback shell does not emit the preferred shell's ready marker;
   // retaining the stale capability would indefinitely queue its first command.
   const shellReadySupported =
@@ -156,7 +162,8 @@ async function spawnAndPublishSession(
     onExit: createSessionExitHandler(
       deps.onSessionExit,
       opts.sessionId,
-      opts.agentSessionGeneration
+      opts.agentSessionGeneration,
+      () => discardStagedStartupCommand(staging)
     ),
     ...(deps.reportReadinessEvent ? { reportReadinessEvent: deps.reportReadinessEvent } : {}),
     ...(opts.shellReadyTimeoutMs !== undefined
@@ -197,10 +204,17 @@ async function spawnAndPublishSession(
     // Diagnostics must never turn a live PTY into a failed create.
   }
   if (startupCommandWritten && opts.command) {
+    staging = stageStartupCommand({ command: opts.command, shellPath: subprocess.shellPath })
+    if (staging.failure) {
+      deps.reportReadinessEvent?.('startup-command-stage-failed', {
+        sessionId: opts.sessionId,
+        reason: staging.failure
+      })
+    }
     const submit = process.platform === 'win32' ? '\r' : '\n'
     // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
     session.write(
-      buildStartupCommandSubmission(opts.command, {
+      buildStartupCommandSubmission(staging.command, {
         submit,
         bracketedPasteSafe: shellReadySupported
       })
@@ -215,6 +229,7 @@ async function spawnAndPublishSession(
     incarnationId: session.incarnationId,
     ...getDaemonSessionResultMetadata(session),
     ...(cwdReadableByDaemon !== null ? { cwdReadableByDaemon } : {}),
+    ...(staging ? { startupDelivery: { line: staging.delivery } } : {}),
     attachToken: token
   }
 }
@@ -222,9 +237,13 @@ async function spawnAndPublishSession(
 function createSessionExitHandler(
   onSessionExit: TerminalHostSessionCreateDependencies['onSessionExit'],
   sessionId: string,
-  generation: string | undefined
+  generation: string | undefined,
+  discardStagedCommand: () => void
 ): () => void {
-  return () => onSessionExit(sessionId, generation)
+  return () => {
+    discardStagedCommand()
+    onSessionExit(sessionId, generation)
+  }
 }
 
 // Why enumeration: a shell's cwd listing is what TCC withholds, and it can withhold it while

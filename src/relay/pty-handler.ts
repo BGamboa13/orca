@@ -29,6 +29,12 @@ import { SHELL_STARTUP_FEATURE_ENV } from '../main/shell-startup-features'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { shouldUseShellReadyStartupDelivery } from '../shared/codex-startup-delivery'
 import { buildStartupCommandSubmission } from '../shared/startup-command-submission'
+import {
+  discardStagedStartupCommand,
+  stageStartupCommand,
+  type StartupCommandStaging
+} from '../shared/startup-command-staging'
+import type { StartupDeliveryReport } from '../shared/startup-delivery-report'
 import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
 import {
   isPathInsideOrEqual,
@@ -242,6 +248,8 @@ type ManagedPty = {
   gitCredentialPromptGuarded: boolean
   historyIsolationEnabled?: boolean
   startupCommand?: ManagedStartupCommand
+  /** Kept past delivery: the typed line may never run if the shell dies first. */
+  stagedStartupCommand?: StartupCommandStaging
   /** Whether this host armed the shell-ready marker for a renderer-delivered startup command.
    *  Kept off `startupCommand`, which is dropped once delivered; the client reads it from the
    *  spawn reply to skip waiting for a marker that will never come (fish, sh, Windows). */
@@ -271,6 +279,7 @@ type RelayAgentSessionCreateResult = {
   agentSessionEnsure?: unknown
   sourceActivation?: PtySourceReceivingActivation
   shellReadyArmed?: boolean
+  startupDelivery?: StartupDeliveryReport
 }
 
 const AGENT_SESSION_CREATE_OPERATION_ID_PATTERN = /^[A-Za-z0-9_-]{43}$/
@@ -321,6 +330,7 @@ function disposeManagedPty(managed: ManagedPty): void {
     return
   }
   managed.disposed = true
+  discardStagedStartupCommand(managed.stagedStartupCommand)
   // Why: clear the SIGKILL fallback timer so it can't fire pty.kill on an already-disposed instance.
   if (managed.killTimer) {
     clearTimeout(managed.killTimer)
@@ -938,10 +948,13 @@ export class PtyHandler {
     }
     const submit = process.platform === 'win32' ? '\r' : '\n'
     // Why: only the shell-ready wrapper arms bracketed-paste; other shells use raw submit so ESC[200~ markers aren't echoed.
-    const payload = buildStartupCommandSubmission(startup.command, {
-      submit,
-      bracketedPasteSafe: startup.waitForShellReady
-    })
+    const payload = buildStartupCommandSubmission(
+      managed.stagedStartupCommand?.command ?? startup.command,
+      {
+        submit,
+        bracketedPasteSafe: startup.waitForShellReady
+      }
+    )
     managed.startupCommand = undefined
     managed.pty.write(payload)
   }
@@ -1874,6 +1887,7 @@ export class PtyHandler {
     incarnationId: string
     sourceActivation?: PtySourceReceivingActivation
     shellReadyArmed?: boolean
+    startupDelivery?: StartupDeliveryReport
   }> {
     const pty = await this.loadPty()
     if (!pty) {
@@ -2069,6 +2083,17 @@ export class PtyHandler {
           }
         : {})
     }
+    if (managed.startupCommand?.providerDelivery && managed.startupCommand.command) {
+      managed.stagedStartupCommand = stageStartupCommand({
+        command: managed.startupCommand.command,
+        shellPath: shell
+      })
+      if (managed.stagedStartupCommand.failure) {
+        process.stderr.write(
+          `[pty-handler] Could not stage startup command for ${id}; typing it in full: ${managed.stagedStartupCommand.failure}\n`
+        )
+      }
+    }
     this.retiredIncarnations.delete(id)
     this.sourcePublication?.activate(id, managed.incarnationId, context)
     const sourceActivation =
@@ -2094,7 +2119,10 @@ export class PtyHandler {
       id,
       incarnationId: managed.incarnationId,
       ...(sourceActivation ? { sourceActivation } : {}),
-      shellReadyArmed: rendererShellReadySupported
+      shellReadyArmed: rendererShellReadySupported,
+      ...(managed.stagedStartupCommand
+        ? { startupDelivery: { line: managed.stagedStartupCommand.delivery } }
+        : {})
     }
   }
 

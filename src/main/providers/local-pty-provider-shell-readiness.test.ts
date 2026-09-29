@@ -223,6 +223,26 @@ describe('LocalPtyProvider', () => {
       }
     })
 
+    it('stages a long startup command and types only the line that sources it', async () => {
+      vi.useFakeTimers()
+      try {
+        process.env.SHELL = '/bin/sh'
+        const command = `claude '${'x'.repeat(600)}'`
+
+        const result = await provider.spawn({ cols: 80, rows: 24, command })
+
+        expect(result.startupDelivery).toEqual({ line: 'staged' })
+        const staged = writeFileSyncMock.mock.calls.find(([path]) =>
+          String(path).includes('orca-launch-')
+        )
+        expect(staged?.[1]).toContain(`\n${command}\n`)
+        await vi.advanceTimersByTimeAsync(200)
+        expect(mockProc.write).toHaveBeenCalledWith(`. '${staged?.[0]}'\n`)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
     it('verifies shell identity against the exact spawn PATH', async () => {
       provider.configure({
         buildSpawnEnv: (_id, env) => ({ ...env, PATH: '/post-hook/bin' })

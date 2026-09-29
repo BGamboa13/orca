@@ -1,5 +1,10 @@
 import type * as pty from 'node-pty'
 import { isBracketedPasteSafeShell } from '../../shared/startup-command-submission'
+import {
+  discardStagedStartupCommand,
+  stageStartupCommand,
+  type StartupCommandStaging
+} from '../../shared/startup-command-staging'
 import { PtyStartupIngress, type PtyIngressEmission } from '../../shared/pty-startup-ingress'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
 import { resolveProcessExitCause } from '../../shared/terminal-exit-cause'
@@ -125,8 +130,10 @@ export function activateLocalPtySession(args: {
   ptyDisposables.set(id, disposables)
 
   let exitedBeforeSpawnReply = false
+  let staging: StartupCommandStaging | undefined
   const onExitDisposable = proc.onExit(({ exitCode, signal }) => {
     exitedBeforeSpawnReply = true
+    discardStagedStartupCommand(staging)
     // Why: node-pty reports a signalled death as {exitCode: 0, signal: N}; the
     // cause is built here, where the signal and the spawn's trustworthiness
     // are both still in hand.
@@ -178,10 +185,16 @@ export function activateLocalPtySession(args: {
         shellName: spawnedShellName,
         waitsForShellReady: plan.shellReadyLaunch?.supportsReadyMarker === true
       })
+    staging = stageStartupCommand({ command: spawn.command, shellPath: plan.shellPath })
+    if (staging.failure) {
+      console.warn(`[pty] Could not stage startup command for ${id}; typing it in full`, {
+        reason: staging.failure
+      })
+    }
     writeStartupCommandWhenShellReady(
       readiness.shellReadyPromise,
       proc,
-      spawn.command,
+      staging.command,
       (cleanup) => {
         readiness.setStartupCommandCleanup(cleanup)
       },
@@ -199,6 +212,7 @@ export function activateLocalPtySession(args: {
     incarnationId,
     pid,
     ...(exitedBeforeSpawnReply ? { exitedBeforeSpawnReply: true } : {}),
-    ...(spawnedWslDistro !== undefined ? { wslDistro: spawnedWslDistro } : {})
+    ...(spawnedWslDistro !== undefined ? { wslDistro: spawnedWslDistro } : {}),
+    ...(staging ? { startupDelivery: { line: staging.delivery } } : {})
   }
 }

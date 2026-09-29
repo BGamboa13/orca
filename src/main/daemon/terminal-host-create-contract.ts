@@ -9,6 +9,7 @@ import type {
 } from '../../shared/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { StartupDeliveryReport } from '../../shared/startup-delivery-report'
 
 export type CreateOrAttachOptions = {
   sessionId: string
@@ -57,4 +58,6 @@ export type CreateOrAttachResult = {
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
   /** Daemon-process verdict on the spawn cwd; only set on a fresh spawn that was given a cwd. */
   cwdReadableByDaemon?: boolean
+  /** Only on a fresh spawn the daemon typed a startup command into. */
+  startupDelivery?: StartupDeliveryReport
 }
