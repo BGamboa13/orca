@@ -9,7 +9,6 @@ import {
   structuredPointerBatchFingerprint,
   type StructuredPointerSubmission
 } from './structured-pointer-operation-id'
-import { formatMessagePointer } from './formatter'
 import { dispatchPreambleMessageId } from './dispatch-preamble-identity'
 import { structuredSessionGateFacts } from './structured-session-pointer-delivery'
 import type { StructuredWorkerIdentity } from '../structured-worker-identity'
@@ -584,7 +583,9 @@ describe("a chat assignee's dispatch preamble", () => {
     await flush()
     expect(h.markAsReadAndDelivered).not.toHaveBeenCalled()
     const first = h.send.mock.calls[0]![0].operationId
-    h.setSubmissions([{ clientMessageId: first, dispatchState: 'accepted', submittedAt: Date.now() }])
+    h.setSubmissions([
+      { clientMessageId: first, dispatchState: 'accepted', submittedAt: Date.now() }
+    ])
     h.delivery.onJournalActivity(IDENTITY.sessionId)
     await flush()
     expect(h.send).toHaveBeenCalledTimes(1)
@@ -596,13 +597,20 @@ describe("a chat assignee's dispatch preamble", () => {
     h.delivery.deliverForHandle('dispatch:d1')
     await flush()
     const first = h.send.mock.calls[0]![0].operationId
-    h.setSubmissions([{ clientMessageId: first, dispatchState: 'rejected', submittedAt: Date.now() }])
+    h.setSubmissions([
+      { clientMessageId: first, dispatchState: 'rejected', submittedAt: Date.now() }
+    ])
     for (let edge = 0; edge < 3; edge++) {
       h.delivery.onJournalActivity(IDENTITY.sessionId)
       await flush()
     }
     // The host answers a recorded id from its ledger and starts nothing: no respawn loop.
-    expect(h.send.mock.calls.map(([input]) => input.operationId)).toEqual([first, first, first, first])
+    expect(h.send.mock.calls.map(([input]) => input.operationId)).toEqual([
+      first,
+      first,
+      first,
+      first
+    ])
     expect(h.markAsReadAndDelivered).not.toHaveBeenCalled()
 
     h.setSubmissions([

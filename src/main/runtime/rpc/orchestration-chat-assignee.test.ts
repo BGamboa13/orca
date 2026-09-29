@@ -58,29 +58,32 @@ let h: SessionCallerHarness
 /** Turns the chat host accepted, per session. */
 let turns: { sessionId: string; text: string }[]
 let busy: Set<string>
-/** Sessions whose latest send never ran because the provider exited before echoing it. */
-let providerDied: Set<string>
+/** Sessions whose provider dies on every turn it is started for. */
+let providerDies: Set<string>
+/** Every provider start a send caused, as the host's operation ledger records it. */
+let starts: { sessionId: string; operationId: string }[]
+/** The host's operation ledger: a recorded id replays its verdict and starts nothing. */
+let ledger: Map<string, 'accepted' | 'rejected'>
+let submissions: Map<
+  string,
+  { clientMessageId: string; dispatchState: string; submittedAt: number }[]
+>
 let closed: string[]
 
-function providerExitedSubmission(id: string) {
-  return {
-    clientMessageId: `${id}-died`,
-    fence: 1,
-    payloadFingerprint: 'f',
-    dispatchState: 'rejected',
-    providerItemId: null,
-    reason: 'The agent exited before it took this message.',
-    rejection: { kind: 'providerExited' },
-    submittedAt: 1,
-    resolvedAt: 2
-  }
+function recordSubmission(sessionId: string, clientMessageId: string, dispatchState: string): void {
+  const recorded = submissions.get(sessionId) ?? []
+  recorded.push({ clientMessageId, dispatchState, submittedAt: Date.now() + recorded.length })
+  submissions.set(sessionId, recorded)
 }
 
 /** The session host a chat runs in: every session idle and live unless marked busy. */
 function installChatHost(): void {
   turns = []
   busy = new Set()
-  providerDied = new Set()
+  providerDies = new Set()
+  starts = []
+  ledger = new Map()
+  submissions = new Map()
   closed = []
   hostRef.current = {
     deps: {
@@ -109,7 +112,7 @@ function installChatHost(): void {
             }
           ]
         : [],
-      submissions: providerDied.has(id) ? [providerExitedSubmission(id)] : []
+      submissions: submissions.get(id) ?? []
     }),
     history: async ({ sessionId }: { sessionId: string }) => ({
       page: {
@@ -131,14 +134,29 @@ function installChatHost(): void {
     }),
     send: async (
       _caller: unknown,
-      input: { envelope: { sessionId: string }; body: AgentJournalMessageItem }
-    ) => {
-      const text = input.body.blocks.map((block) => (block.type === 'text' ? block.text : ''))
-      turns.push({ sessionId: input.envelope.sessionId, text: text.join('') })
-      return {
-        ok: true,
-        value: { clientMessageId: `m${turns.length}`, submission: { dispatchState: 'accepted' } }
+      input: {
+        envelope: { sessionId: string; clientOperationId?: string }
+        body: AgentJournalMessageItem
       }
+    ) => {
+      const { sessionId } = input.envelope
+      const operationId = input.envelope.clientOperationId ?? `op${ledger.size}`
+      const replayed = ledger.get(operationId)
+      if (replayed) {
+        return {
+          ok: true,
+          value: { clientMessageId: operationId, submission: { dispatchState: replayed } }
+        }
+      }
+      starts.push({ sessionId, operationId })
+      const dispatchState = providerDies.has(sessionId) ? 'rejected' : 'accepted'
+      ledger.set(operationId, dispatchState)
+      recordSubmission(sessionId, operationId, dispatchState)
+      if (dispatchState === 'accepted') {
+        const text = input.body.blocks.map((block) => (block.type === 'text' ? block.text : ''))
+        turns.push({ sessionId, text: text.join('') })
+      }
+      return { ok: true, value: { clientMessageId: operationId, submission: { dispatchState } } }
     }
   }
 }
@@ -230,22 +248,31 @@ describe('dispatch --inject to a chat', () => {
     expect(h.db.getDispatchContextById(dispatchId)?.status).toBe('dispatched')
   })
 
-  it('never restarts a chat whose provider died on its latest send, by preamble or by mail', async () => {
-    providerDied.add(SESSION_Z)
+  it('never restarts a chat whose provider dies, by preamble or by mail, and sends the preamble once it runs', async () => {
+    providerDies.add(SESSION_Z)
     const { dispatchId, preamble } = await injectToChat()
     await as(SESSION_Y, 'orchestration.send', { to: ADDRESS_Z, subject: 'also this' })
+    // One start: the preamble. Mail that arrives meanwhile waits behind it in the same mailbox.
+    await vi.waitFor(() => expect(starts).toHaveLength(1))
     for (let edge = 0; edge < 3; edge += 1) {
       h.runtime.onStructuredSessionStatusForMail({ sessionId: SESSION_Z, status: 'idle' })
+      await new Promise((resolve) => setTimeout(resolve, 10))
     }
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    // Every retry replays its recorded id, which starts nothing: no respawn loop.
+    expect(starts).toHaveLength(1)
     expect(turns).toEqual([])
     expect(h.db.getMessageById(dispatchPreambleMessageId(dispatchId))?.read).toBe(0)
 
-    // The person's next message ran, which releases the hold: the preamble goes, once.
-    providerDied.delete(SESSION_Z)
+    // The person's next message runs, which proves the agent can run: the preamble goes, once.
+    providerDies.delete(SESSION_Z)
+    recordSubmission(SESSION_Z, 'person-turn', 'accepted')
     h.runtime.onStructuredSessionStatusForMail({ sessionId: SESSION_Z, status: 'idle' })
-    await vi.waitFor(() => expect(turns[0]).toEqual({ sessionId: SESSION_Z, text: preamble }))
-    expect(turns.filter((turn) => turn.text === preamble)).toHaveLength(1)
+    await vi.waitFor(() =>
+      expect(h.db.getMessageById(dispatchPreambleMessageId(dispatchId))?.read).toBe(1)
+    )
+    expect(turns.filter((turn) => turn.text === preamble)).toEqual([
+      { sessionId: SESSION_Z, text: preamble }
+    ])
   })
 
   it("re-derives a preamble still owed after a restart, at the chat's next idle edge", async () => {
