@@ -888,7 +888,6 @@ describe('an existing chat dispatched to by its address', () => {
     const coordinator = await openChat(COORDINATOR)
     const peer = await openChat(PEER_CHAT)
     const { runId, taskId } = await coordinatorRunAndTask()
-
     const dispatched = await call(
       'orchestration.dispatch',
       { task: taskId, to: `session:${PEER_CHAT}`, inject: true, returnPreamble: true },
@@ -896,28 +895,20 @@ describe('an existing chat dispatched to by its address', () => {
     )
     const preamble = String(dispatched.preamble)
     const dispatchId = idOf(dispatched.dispatch)
-
     await vi.waitFor(() => expect(peer.turns).toHaveLength(1), WAIT)
     expect(turnText(peer.turns[0]!)).toBe(preamble)
     await settleTurn(PEER_CHAT, 0)
 
-    const capability = /--dispatch-capability (\S+)/.exec(preamble)?.[1]
+    const payload = JSON.stringify({ taskId, dispatchId, outcome: 'succeeded' })
     const done = await call(
       'orchestration.send',
-      {
-        from: `session:${PEER_CHAT}`,
-        type: 'worker_done',
-        subject: 'Done',
-        payload: JSON.stringify({ taskId, dispatchId, outcome: 'succeeded' })
-      },
-      { sessionId: PEER_CHAT, ...(capability ? { capability } : {}) }
+      { from: `session:${PEER_CHAT}`, type: 'worker_done', subject: 'Done', payload },
+      { sessionId: PEER_CHAT, capability: /--dispatch-capability (\S+)/.exec(preamble)?.[1] ?? '' }
     )
     expect(done).toMatchObject({ lifecycle: { action: 'completed' } })
-
     await vi.waitFor(() => expect(coordinator.turns).toHaveLength(1), WAIT)
     expect(turnText(coordinator.turns[0]!)).toBe(ptyPointer(`run:${runId}`))
-    const checked = await call('orchestration.check', {}, { sessionId: COORDINATOR })
-    expect(checked).toMatchObject({
+    expect(await call('orchestration.check', {}, { sessionId: COORDINATOR })).toMatchObject({
       messages: [{ type: 'worker_done', from_handle: `session:${PEER_CHAT}` }]
     })
   })
