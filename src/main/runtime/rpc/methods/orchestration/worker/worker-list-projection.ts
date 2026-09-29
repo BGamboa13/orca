@@ -6,6 +6,8 @@ import {
 import { resolveFleetWorkerOutcome } from '../../../../../../shared/orchestration-fleet-outcome-resolution'
 import type { WorkerTerminalListState } from '../../../../orchestration/worker-terminal-ownership'
 import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { OrchestrationFleetWorker } from '../../../../../../shared/orchestration-fleet-projection'
 import { observeStructuredAssignee } from '../../../../structured-worker-authority'
 import { applyExecutionHostVerdict } from './fleet-execution-host-verdict'
 import { structuredAgentSessionLeadState } from '../../../../../../shared/structured-agent-session-agent-status'
@@ -18,11 +20,11 @@ export type WorkerListPageParams = {
   paginate?: boolean
 }
 
-export function projectWorkerFleet(args: {
+export async function projectWorkerFleet(args: {
   /** Reads a structured session's liveness off this runtime's own session host. */
   db: OrchestrationDb
   /** A structured session's status, as `@idle` reads it (`getAgentStatusForHandle`). */
-  agentStatus: (handle: string) => string | null
+  agentStatus: (handle: string) => Promise<string | null>
   rows: ReturnType<OrchestrationDb['listWorkerTerminalResources']>
   attentionFacts: ReturnType<OrchestrationDb['getWorkerAttentionFactsForDispatches']>
   statuses: Parameters<typeof projectOrchestrationFleet>[0]['statuses']
@@ -63,7 +65,7 @@ export function projectWorkerFleet(args: {
       limit: args.limit,
       now: args.now
     })
-    applyStructuredSessionVerdicts(page.workers, durable, args)
+    await applyStructuredSessionVerdicts(page.workers, durable, args)
     return { ...page, durable }
   }
 
@@ -78,7 +80,7 @@ export function projectWorkerFleet(args: {
       }).workers
     )
   }
-  applyStructuredSessionVerdicts(projections, durable, args)
+  await applyStructuredSessionVerdicts(projections, durable, args)
   return {
     workers: projections,
     page: { limit: workers.length, total: workers.length, hasMore: false, nextCursor: null },
@@ -91,20 +93,21 @@ export function projectWorkerFleet(args: {
  * agent-status row can ever bind to it. Its liveness is the session host's own verdict, the same
  * observation worker-show reports.
  */
-function applyStructuredSessionVerdicts(
+async function applyStructuredSessionVerdicts(
   projected: ReturnType<typeof projectOrchestrationFleet>['workers'],
   durable: ReadonlyMap<string, FleetDurableWorker>,
   host: {
     db: OrchestrationDb
     now: number
-    agentStatus: (handle: string) => string | null
+    agentStatus: (handle: string) => Promise<string | null>
   }
-): void {
+): Promise<void> {
   for (const worker of projected) {
     const handle = durable.get(worker.dispatchId)?.agentTerminalHandle
     const observation = handle ? observeStructuredAssignee(handle, host.db) : null
     if (handle && observation) {
-      const status = PROJECTED_STATUSES.find((known) => known === host.agentStatus(handle))
+      const reported = await host.agentStatus(handle)
+      const status = PROJECTED_STATUSES.find((known) => known === reported)
       applyExecutionHostVerdict(
         worker,
         {
@@ -123,3 +126,39 @@ const PROJECTED_STATUSES: readonly StructuredAgentSessionProjectedStatus[] = [
   'attention',
   'idle'
 ]
+
+/**
+ * The same fleet verdict `worker-list` publishes, for one Dispatch.
+ *
+ * Why worker-show needs it: `observation.status` is PTY liveness, so an agent that died
+ * at a trust prompt inside a live pane read `live` here and `unverifiable` from
+ * `worker-list` — and `worker-list`'s own `nextAction` pointed back at this command.
+ */
+export async function projectFleetWorkerPage(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  dispatchId: string
+): Promise<Awaited<ReturnType<typeof projectWorkerFleet>> | null> {
+  const rows = db.listWorkerTerminalResources({ dispatchIds: [dispatchId], limit: 1 })
+  if (rows.length === 0) {
+    return null
+  }
+  const now = Date.now()
+  return projectWorkerFleet({
+    db,
+    agentStatus: (handle) => runtime.getAgentStatusForHandle(handle),
+    rows,
+    attentionFacts: db.getWorkerAttentionFactsForDispatches([dispatchId], now),
+    statuses: runtime.getOrchestrationFleetAgentStatusSnapshot(),
+    limit: 1,
+    now
+  })
+}
+
+export async function projectFleetWorker(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  dispatchId: string
+): Promise<OrchestrationFleetWorker | null> {
+  return (await projectFleetWorkerPage(runtime, db, dispatchId))?.workers[0] ?? null
+}

@@ -3,8 +3,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { parseWorkerTerminalHostScope } from '../../../../orchestration/worker-terminal-process-liveness'
-import type { OrchestrationFleetWorker } from '../../../../../../shared/orchestration-fleet-projection'
-import { projectWorkerFleet } from './worker-list-projection'
+import { projectFleetWorker } from './worker-list-projection'
 import {
   observeStructuredWorker,
   resolveStructuredWorkerForDispatch
@@ -250,7 +249,7 @@ export async function showContextOnlyWorker(
   return {
     dispatch: exposeDispatchContext(dispatch),
     worker: exposeContextOnlyWorker(dispatch),
-    projection: projectFleetWorker(runtime, db, dispatch.id),
+    projection: await projectFleetWorker(runtime, db, dispatch.id),
     terminal: observation.exact ? observation.terminal : null,
     observation: exposeObservation(observation),
     terminalResource: null
@@ -276,42 +275,6 @@ export function exposeWorker(worker: WorkerDispatchRow) {
     createdAt: worker.created_at,
     updatedAt: worker.updated_at
   }
-}
-
-/**
- * The same fleet verdict `worker-list` publishes, for one Dispatch.
- *
- * Why worker-show needs it: `observation.status` is PTY liveness, so an agent that died
- * at a trust prompt inside a live pane read `live` here and `unverifiable` from
- * `worker-list` — and `worker-list`'s own `nextAction` pointed back at this command.
- */
-export function projectFleetWorkerPage(
-  runtime: OrcaRuntimeService,
-  db: OrchestrationDb,
-  dispatchId: string
-): ReturnType<typeof projectWorkerFleet> | null {
-  const rows = db.listWorkerTerminalResources({ dispatchIds: [dispatchId], limit: 1 })
-  if (rows.length === 0) {
-    return null
-  }
-  const now = Date.now()
-  return projectWorkerFleet({
-    db,
-    agentStatus: (handle) => runtime.getAgentStatusForHandle(handle),
-    rows,
-    attentionFacts: db.getWorkerAttentionFactsForDispatches([dispatchId], now),
-    statuses: runtime.getOrchestrationFleetAgentStatusSnapshot(),
-    limit: 1,
-    now
-  })
-}
-
-export function projectFleetWorker(
-  runtime: OrcaRuntimeService,
-  db: OrchestrationDb,
-  dispatchId: string
-): OrchestrationFleetWorker | null {
-  return projectFleetWorkerPage(runtime, db, dispatchId)?.workers[0] ?? null
 }
 
 export function exposeFederatedWorkerObservation(

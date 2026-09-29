@@ -4,9 +4,10 @@
  * A PTY assignee has its preamble typed into its pane, where a busy agent queues it. A chat takes
  * input only as a turn, and a turn sent mid-turn folds into the running one, so the preamble is
  * stored in the Dispatch's mailbox under the id only the host mints (`isOwedDispatchPreamble`), no
- * mail reader ever returns it, and the structured mail lane delivers it: it waits out a running turn or a question only a human can answer, wakes an
- * evicted chat, and is found again at the chat's idle edge after a restart. It dies with the
- * Dispatch, because that lane reaches a chat's Dispatch mailbox only while the Dispatch is active.
+ * mail reader ever returns it, and the structured mail lane delivers it as a plain send: it waits
+ * out a running turn or a question only a human can answer, a chat at rest is started by the send
+ * itself, and it is found again at the chat's idle edge after a restart. It dies with the Dispatch,
+ * because that lane reaches a chat's Dispatch mailbox only while the Dispatch is active.
  */
 
 import type { OrcaRuntimeService } from '../orca-runtime'

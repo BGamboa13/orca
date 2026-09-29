@@ -79,11 +79,9 @@ function installHosts(): void {
         listRecords: () => [...h.records.values()]
       }
     },
-    hold: async () => {},
-    release: () => {},
     hasSession: (id: string) => h.records.get(id)?.lease.claimStatus === 'live',
     close: async () => {},
-    journalSnapshot: () => ({
+    journalSnapshot: async () => ({
       items: assigneeBusy
         ? [
             {
@@ -100,7 +98,7 @@ function installHosts(): void {
           ]
         : []
     }),
-    history: () => ({ page: { items: [], hasOlder: false } }),
+    history: async () => ({ page: { items: [], hasOlder: false } }),
     send: async (_caller: unknown, input: { body: AgentJournalMessageItem }) => {
       chatTurns.push(input.body.blocks.map((b) => (b.type === 'text' ? b.text : '')).join(''))
       return {

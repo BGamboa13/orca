@@ -72,13 +72,11 @@ function installChatHost(): void {
         listRecords: () => [...h.records.values()]
       }
     },
-    hold: async () => {},
-    release: () => {},
     hasSession: (id: string) => h.records.get(id)?.lease.claimStatus === 'live',
     close: async (id: string) => {
       closed.push(id)
     },
-    journalSnapshot: (id: string) => ({
+    journalSnapshot: async (id: string) => ({
       items: busy.has(id)
         ? [
             {
@@ -95,7 +93,7 @@ function installChatHost(): void {
           ]
         : []
     }),
-    history: ({ sessionId }: { sessionId: string }) => ({
+    history: async ({ sessionId }: { sessionId: string }) => ({
       page: {
         items: [
           {

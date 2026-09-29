@@ -98,7 +98,7 @@ function installClearedWorkerHost(): void {
       }
     },
     hasSession: (id: string) => records.get(id)?.lease.claimStatus === 'live',
-    journalSnapshot: (id: string) => {
+    journalSnapshot: async (id: string) => {
       if (records.get(id)?.lease.claimStatus !== 'live') {
         throw new Error(AGENT_SESSION_NOT_ATTACHED.code)
       }
@@ -108,7 +108,7 @@ function installClearedWorkerHost(): void {
       closed.push(id)
       records.set(id, record(id, true))
     },
-    history: ({ sessionId }: { sessionId: string }) => {
+    history: async ({ sessionId }: { sessionId: string }) => {
       historyAsked.push(sessionId)
       return {
         page: {
@@ -160,16 +160,16 @@ describe('a structured worker continued by /clear is served by its successor', (
     expect(observeStructuredWorker(registerWorker())).toEqual({ status: 'live' })
   })
 
-  it('terminal read serves the successor', () => {
+  it('terminal read serves the successor', async () => {
     const identity = registerWorker()
-    const read = readStructuredWorkerTerminal({ handle: identity.handle, db: null })
+    const read = await readStructuredWorkerTerminal({ handle: identity.handle, db: null })
     expect(historyAsked).toEqual([SUCCESSOR])
     expect(read?.status).toBe('running')
     expect(JSON.stringify(read)).toContain('POST-CLEAR')
   })
 
-  it('worker-read serves the successor', () => {
-    const read = readStructuredWorkerJournal({
+  it('worker-read serves the successor', async () => {
+    const read = await readStructuredWorkerJournal({
       identity: registerWorker(),
       dispatchId: 'ctx_1',
       workerState: 'running',
@@ -180,8 +180,8 @@ describe('a structured worker continued by /clear is served by its successor', (
     expect(JSON.stringify(read)).not.toContain('PRE-CLEAR')
   })
 
-  it('the release archive freezes the successor', () => {
-    const archive = captureStructuredWorkerArchive(registerWorker(), 'claude')
+  it('the release archive freezes the successor', async () => {
+    const archive = await captureStructuredWorkerArchive(registerWorker(), 'claude')
     expect(JSON.stringify(archive)).toContain('POST-CLEAR')
   })
 
@@ -191,9 +191,9 @@ describe('a structured worker continued by /clear is served by its successor', (
     expect(stop.stopped).toBe(true)
   })
 
-  it("agent status is the successor's", () => {
+  it("agent status is the successor's", async () => {
     const identity = registerWorker()
-    expect(new OrcaRuntimeService().getAgentStatusForHandle(identity.handle)).toBe('idle')
+    expect(await new OrcaRuntimeService().getAgentStatusForHandle(identity.handle)).toBe('idle')
   })
 })
 
@@ -204,30 +204,30 @@ describe('terminal read by the session address an agent is shown', () => {
     installClearedWorkerHost()
   })
 
-  it('reads a worker at session:<its id>, served by the session running it', () => {
+  it('reads a worker at session:<its id>, served by the session running it', async () => {
     registerWorker()
-    const read = readStructuredWorkerTerminal({ handle: `session:${MINTED}`, db: null })
+    const read = await readStructuredWorkerTerminal({ handle: `session:${MINTED}`, db: null })
     expect(read?.handle).toBe(`session:${MINTED}`)
     expect(historyAsked).toEqual([SUCCESSOR])
   })
 
-  it('reads a chat, in the same shape a terminal read has', () => {
+  it('reads a chat, in the same shape a terminal read has', async () => {
     // No worker registered: MINTED is an ordinary chat the user cleared.
-    const read = readStructuredWorkerTerminal({ handle: `session:${MINTED}`, db: null })
+    const read = await readStructuredWorkerTerminal({ handle: `session:${MINTED}`, db: null })
     expect(historyAsked).toEqual([SUCCESSOR])
     expect(read).toMatchObject({ status: 'running', nextCursor: null, truncated: false })
     expect(read?.tail.join('\n')).toContain('POST-CLEAR')
   })
 
-  it('refuses a cursor, as for any structured session', () => {
-    expect(() =>
+  it('refuses a cursor, as for any structured session', async () => {
+    await expect(
       readStructuredWorkerTerminal({ handle: `session:${MINTED}`, db: null, cursor: 0 })
-    ).toThrow(/without a cursor/)
+    ).rejects.toThrow(/without a cursor/)
   })
 
-  it('leaves an address naming no session to the terminal lookup', () => {
+  it('leaves an address naming no session to the terminal lookup', async () => {
     expect(
-      readStructuredWorkerTerminal({
+      await readStructuredWorkerTerminal({
         handle: 'session:9e1d2c3b-4a5f-4e6d-8c7b-6a5f4e3d2c1b',
         db: null
       })
@@ -247,7 +247,7 @@ describe('one lineage walk, one failure contract', () => {
     const identity = registerWorker()
     storeFailure = new Error('disk gone')
 
-    expect(() =>
+    await expect(
       readStructuredWorkerJournal({
         identity,
         dispatchId: 'ctx_1',
@@ -255,7 +255,7 @@ describe('one lineage walk, one failure contract', () => {
         liveness: 'live',
         agent: 'claude'
       })
-    ).toThrow(expect.objectContaining({ code: 'session_caller_not_live' }))
+    ).rejects.toMatchObject({ code: 'session_caller_not_live' })
     await expect(stopStructuredWorker(identity, 'ctx_1')).rejects.toMatchObject({
       code: 'session_caller_not_live'
     })
@@ -263,16 +263,16 @@ describe('one lineage walk, one failure contract', () => {
     expect(closed).toEqual([])
   })
 
-  it('refuses a chat on another host with the typed host-boundary refusal', () => {
+  it('refuses a chat on another host with the typed host-boundary refusal', async () => {
     const successor = records.get(SUCCESSOR)!
     records.set(SUCCESSOR, {
       ...successor,
       location: { ...successor.location, executionHostId: 'ssh:box' }
     })
 
-    expect(() => readStructuredWorkerTerminal({ handle: `session:${MINTED}`, db: null })).toThrow(
-      expect.objectContaining({ code: 'session_caller_host_boundary' })
-    )
+    await expect(
+      readStructuredWorkerTerminal({ handle: `session:${MINTED}`, db: null })
+    ).rejects.toMatchObject({ code: 'session_caller_host_boundary' })
     // Mail maps the same verdict to "not deliverable here".
     expect(structuredWorkerMailSessionId(MINTED)).toBeNull()
   })
