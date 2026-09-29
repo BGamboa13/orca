@@ -102,7 +102,7 @@ function installClearedWorkerHost(): void {
       if (records.get(id)?.lease.claimStatus !== 'live') {
         throw new Error(AGENT_SESSION_NOT_ATTACHED.code)
       }
-      return { items: [message(`${id}-1`, 'idle')] }
+      return { items: [message(`${id}-1`, 'idle')], submissions: [] }
     },
     close: async (id: string) => {
       closed.push(id)

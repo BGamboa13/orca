@@ -96,7 +96,8 @@ function installHosts(): void {
               }
             }
           ]
-        : []
+        : [],
+      submissions: []
     }),
     history: async () => ({ page: { items: [], hasOlder: false } }),
     send: async (_caller: unknown, input: { body: AgentJournalMessageItem }) => {

@@ -58,12 +58,29 @@ let h: SessionCallerHarness
 /** Turns the chat host accepted, per session. */
 let turns: { sessionId: string; text: string }[]
 let busy: Set<string>
+/** Sessions whose latest send never ran because the provider exited before echoing it. */
+let providerDied: Set<string>
 let closed: string[]
+
+function providerExitedSubmission(id: string) {
+  return {
+    clientMessageId: `${id}-died`,
+    fence: 1,
+    payloadFingerprint: 'f',
+    dispatchState: 'rejected',
+    providerItemId: null,
+    reason: 'The agent exited before it took this message.',
+    rejection: { kind: 'providerExited' },
+    submittedAt: 1,
+    resolvedAt: 2
+  }
+}
 
 /** The session host a chat runs in: every session idle and live unless marked busy. */
 function installChatHost(): void {
   turns = []
   busy = new Set()
+  providerDied = new Set()
   closed = []
   hostRef.current = {
     deps: {
@@ -91,7 +108,8 @@ function installChatHost(): void {
               }
             }
           ]
-        : []
+        : [],
+      submissions: providerDied.has(id) ? [providerExitedSubmission(id)] : []
     }),
     history: async ({ sessionId }: { sessionId: string }) => ({
       page: {
@@ -210,6 +228,24 @@ describe('dispatch --inject to a chat', () => {
     h.runtime.onStructuredSessionStatusForMail({ sessionId: SESSION_Z, status: 'idle' })
     await vi.waitFor(() => expect(turns).toEqual([{ sessionId: SESSION_Z, text: preamble }]))
     expect(h.db.getDispatchContextById(dispatchId)?.status).toBe('dispatched')
+  })
+
+  it('never restarts a chat whose provider died on its latest send, by preamble or by mail', async () => {
+    providerDied.add(SESSION_Z)
+    const { dispatchId, preamble } = await injectToChat()
+    await as(SESSION_Y, 'orchestration.send', { to: ADDRESS_Z, subject: 'also this' })
+    for (let edge = 0; edge < 3; edge += 1) {
+      h.runtime.onStructuredSessionStatusForMail({ sessionId: SESSION_Z, status: 'idle' })
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(turns).toEqual([])
+    expect(h.db.getMessageById(dispatchPreambleMessageId(dispatchId))?.read).toBe(0)
+
+    // The person's next message ran, which releases the hold: the preamble goes, once.
+    providerDied.delete(SESSION_Z)
+    h.runtime.onStructuredSessionStatusForMail({ sessionId: SESSION_Z, status: 'idle' })
+    await vi.waitFor(() => expect(turns[0]).toEqual({ sessionId: SESSION_Z, text: preamble }))
+    expect(turns.filter((turn) => turn.text === preamble)).toHaveLength(1)
   })
 
   it("re-derives a preamble still owed after a restart, at the chat's next idle edge", async () => {
