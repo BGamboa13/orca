@@ -14,9 +14,9 @@ import {
   STAGED_STARTUP_COMMAND_STALE_MS,
   discardStagedStartupCommand,
   stageStartupCommand,
+  startupStagingFailureNotice,
   sweepStaleStagedStartupCommands
 } from './startup-command-staging'
-import { parseStartupDeliveryReport } from './startup-delivery-report'
 
 let directory: string
 
@@ -151,11 +151,20 @@ describe('sweepStaleStagedStartupCommands', () => {
   })
 })
 
-describe('parseStartupDeliveryReport', () => {
-  it('accepts known deliveries and drops anything else', () => {
-    expect(parseStartupDeliveryReport({ line: 'staged' })).toEqual({ line: 'staged' })
-    expect(parseStartupDeliveryReport({ line: 'pasted' })).toBeUndefined()
-    expect(parseStartupDeliveryReport('staged')).toBeUndefined()
-    expect(parseStartupDeliveryReport(undefined)).toBeUndefined()
+describe('startupStagingFailureNotice', () => {
+  it('says nothing when staging did not fail', () => {
+    expect(startupStagingFailureNotice(stage(`claude 'fix it'`))).toBeNull()
+    expect(startupStagingFailureNotice(stage(`claude '${'x'.repeat(600)}'`))).toBeNull()
+  })
+
+  it('prints one line naming the failure, with no control bytes from the reason', () => {
+    const notice = startupStagingFailureNotice({
+      command: 'x',
+      delivery: 'typed-after-stage-failed',
+      failure: 'EACCES: permission denied\nsecond line'
+    })
+    expect(notice).toBe(
+      '\r\n[orca] Could not stage the launch command (EACCES: permission denied second line); typed it in full. If the shell shows quote> or waits for more input, press Ctrl-C and launch again.\r\n'
+    )
   })
 })

@@ -2,6 +2,7 @@ import { buildStartupCommandSubmission } from '../../shared/startup-command-subm
 import {
   discardStagedStartupCommand,
   stageStartupCommand,
+  startupStagingFailureNotice,
   type StartupCommandStaging
 } from '../../shared/startup-command-staging'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
@@ -205,7 +206,9 @@ async function spawnAndPublishSession(
   }
   if (startupCommandWritten && opts.command) {
     staging = stageStartupCommand({ command: opts.command, shellPath: subprocess.shellPath })
-    if (staging.failure) {
+    const notice = startupStagingFailureNotice(staging)
+    if (notice) {
+      session.startupIngress.accept(notice)
       try {
         deps.reportReadinessEvent?.('startup-command-stage-failed', {
           sessionId: opts.sessionId,
@@ -233,7 +236,6 @@ async function spawnAndPublishSession(
     incarnationId: session.incarnationId,
     ...getDaemonSessionResultMetadata(session),
     ...(cwdReadableByDaemon !== null ? { cwdReadableByDaemon } : {}),
-    ...(staging ? { startupDelivery: { line: staging.delivery } } : {}),
     attachToken: token
   }
 }

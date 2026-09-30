@@ -32,9 +32,9 @@ import { buildStartupCommandSubmission } from '../shared/startup-command-submiss
 import {
   discardStagedStartupCommand,
   stageStartupCommand,
+  startupStagingFailureNotice,
   type StartupCommandStaging
 } from '../shared/startup-command-staging'
-import type { StartupDeliveryReport } from '../shared/startup-delivery-report'
 import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
 import {
   isPathInsideOrEqual,
@@ -279,7 +279,6 @@ type RelayAgentSessionCreateResult = {
   agentSessionEnsure?: unknown
   sourceActivation?: PtySourceReceivingActivation
   shellReadyArmed?: boolean
-  startupDelivery?: StartupDeliveryReport
 }
 
 const AGENT_SESSION_CREATE_OPERATION_ID_PATTERN = /^[A-Za-z0-9_-]{43}$/
@@ -1887,7 +1886,6 @@ export class PtyHandler {
     incarnationId: string
     sourceActivation?: PtySourceReceivingActivation
     shellReadyArmed?: boolean
-    startupDelivery?: StartupDeliveryReport
   }> {
     const pty = await this.loadPty()
     if (!pty) {
@@ -2099,6 +2097,11 @@ export class PtyHandler {
     const sourceActivation =
       context && this.sourcePublication?.receivingActivation?.(id, context.clientId)
     this.wireAndStore(managed)
+    const stagingNotice =
+      managed.stagedStartupCommand && startupStagingFailureNotice(managed.stagedStartupCommand)
+    if (stagingNotice) {
+      managed.startupIngress?.accept(stagingNotice)
+    }
     if (context?.isStale() && !params.agentSessionEnsure && !params.agentSessionCreateOperationId) {
       // Why: if the client reconnected while pty.spawn was in flight, the
       // response is discarded and no renderer can own this PTY. Shut it down
@@ -2119,10 +2122,7 @@ export class PtyHandler {
       id,
       incarnationId: managed.incarnationId,
       ...(sourceActivation ? { sourceActivation } : {}),
-      shellReadyArmed: rendererShellReadySupported,
-      ...(managed.stagedStartupCommand
-        ? { startupDelivery: { line: managed.stagedStartupCommand.delivery } }
-        : {})
+      shellReadyArmed: rendererShellReadySupported
     }
   }
 

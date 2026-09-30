@@ -110,20 +110,19 @@ describe('DaemonPtyAdapter startup delivery', () => {
     expect(lastSubprocess.write).toHaveBeenCalledExactlyOnceWith(`${startup.command}\n`)
   })
 
-  itOnPosix('reports a staged launch line back to main and types only the short line', async () => {
+  itOnPosix('types only the short line that sources a staged launch line', async () => {
     const stagingDir = join(dir, 'tmp')
     mkdirSync(stagingDir)
     vi.stubEnv('TMPDIR', stagingDir)
     nextShellPath = '/bin/zsh'
     try {
       const command = `claude '${'x'.repeat(600)}'`
-      const result = await adapter.spawn({
+      await adapter.spawn({
         cols: 80,
         rows: 24,
         command,
         env: { SHELL: '/bin/zsh' }
       })
-      expect(result.startupDelivery).toEqual({ line: 'staged' })
       lastSubprocess._simulateData('\x1b]777;orca-shell-ready\x07\r\nuser@host $ ')
       await waitFor(() => vi.mocked(lastSubprocess.write).mock.calls.length > 0)
       const [script] = readdirSync(stagingDir)

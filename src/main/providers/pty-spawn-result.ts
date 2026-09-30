@@ -4,7 +4,6 @@ import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session-
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { PtySourceReceivingActivation } from '../../shared/pty-source-receiving-activation'
 import type { TerminalOwner } from '../../shared/terminal-owner'
-import type { StartupDeliveryReport } from '../../shared/startup-delivery-report'
 
 export type PtySpawnResult = {
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
@@ -22,9 +21,6 @@ export type PtySpawnResult = {
    *  not wait; absent means the host predates the field and the client keeps its own guess.
    *  Never collapse absent into `false`. */
   shellReadyArmed?: boolean
-  /** How the execution host typed this spawn's startup command. Absent when the host typed none,
-   *  or predates the field; never read absence as "typed". */
-  startupDelivery?: StartupDeliveryReport
   /** OS-level pid of the shell process, when available at spawn time.
    *  Why: the memory collector needs this to walk each PTY's process
    *  subtree. Daemon-backed providers return it from the RPC result;

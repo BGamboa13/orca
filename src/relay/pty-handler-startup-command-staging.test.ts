@@ -60,25 +60,23 @@ describePosix('relay startup command staging', () => {
     rmSync(stagingDir, { recursive: true, force: true })
   })
 
-  async function spawn(command: string): Promise<{ startupDelivery?: unknown }> {
-    return (await dispatcher.callRequest('pty.spawn', {
+  async function spawn(command: string): Promise<unknown> {
+    return await dispatcher.callRequest('pty.spawn', {
       command,
       commandDelivery: 'provider',
       env: { SHELL: '/bin/zsh' }
-    })) as { startupDelivery?: unknown }
+    })
   }
 
-  it('types a short provider-delivered command and reports it typed', async () => {
-    const reply = await spawn('echo short')
-    expect(reply.startupDelivery).toEqual({ line: 'typed' })
+  it('types a short provider-delivered command as is', async () => {
+    await spawn('echo short')
     await vi.advanceTimersByTimeAsync(50)
     expect(mockPtySpawn.mock.results[0]?.value.write).toHaveBeenCalledWith('echo short\n')
   })
 
   it('stages a long provider-delivered command and types only the sourcing line', async () => {
     const command = `claude '${'x'.repeat(600)}'`
-    const reply = await spawn(command)
-    expect(reply.startupDelivery).toEqual({ line: 'staged' })
+    await spawn(command)
     const [script] = readdirSync(stagingDir)
     const scriptPath = join(stagingDir, script)
     expect(readFileSync(scriptPath, 'utf8').split('\n')[1]).toBe(command)
@@ -96,12 +94,24 @@ describePosix('relay startup command staging', () => {
     expect(existsSync(scriptPath)).toBe(false)
   })
 
-  it('reports nothing for a renderer-delivered command it only holds as a hint', async () => {
-    const reply = (await dispatcher.callRequest('pty.spawn', {
+  it('stages nothing for a renderer-delivered command it only holds as a hint', async () => {
+    await dispatcher.callRequest('pty.spawn', {
       command: `claude '${'x'.repeat(600)}'`,
       env: { SHELL: '/bin/zsh' }
-    })) as { startupDelivery?: unknown }
-    expect(reply.startupDelivery).toBeUndefined()
+    })
     expect(readdirSync(stagingDir)).toEqual([])
+  })
+
+  it('prints a notice in the terminal when it types a line it could not stage', async () => {
+    vi.stubEnv('TMPDIR', join(stagingDir, 'missing'))
+    const command = `claude '${'x'.repeat(600)}'`
+    await spawn(command)
+    await vi.advanceTimersByTimeAsync(50)
+    expect(mockPtySpawn.mock.results[0]?.value.write).toHaveBeenCalledWith(`${command}\n`)
+    const output = dispatcher._notifications
+      .filter((notification) => notification.method === 'pty.data')
+      .map((notification) => String(notification.params?.data))
+      .join('')
+    expect(output).toContain('[orca] Could not stage the launch command (ENOENT')
   })
 })
