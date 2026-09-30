@@ -36,7 +36,7 @@ describe('createWorktreeCheckoutProgressReader', () => {
   it('delivers the record git prints after a stall, so the bar never lags git', () => {
     const { reports, reader } = harness()
     reader.read(record(40, 100))
-    // Git reprints the same percent about once per second while stalled.
+    // After each one-second tick git reprints the same percent once, on its next file.
     reader.read(record(40, 100))
     reader.read(record(40, 100))
     reader.read(record(60, 100))
