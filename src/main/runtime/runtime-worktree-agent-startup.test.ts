@@ -139,6 +139,35 @@ describe('buildWorktreeStartupForAgent prompt carry', () => {
     expect(result.startup.launchFile?.content).toBe('summarize the diff\nthen list the risks')
     expect(result.startup.command).not.toContain('summarize')
   })
+
+  it('leaves a prompt needing a file the agent is not known to read as the follow-up paste', () => {
+    const prompt = 'x'.repeat(20_000)
+    const result = buildWorktreeStartupForAgent({
+      repo: makeRepo({}),
+      settings,
+      agent: 'gemini',
+      prompt,
+      getLaunchPlatform: () => 'linux',
+      toSessionOptions: () => undefined
+    })
+    expect(result.startup.launchFile).toBeUndefined()
+    expect(result.followup?.prompt).toBe(prompt)
+  })
+
+  it('reports that prompt uncarried, with no follow-up, to a caller that pastes it itself', () => {
+    const onPromptCarry = vi.fn()
+    const result = buildWorktreeStartupForAgent({
+      repo: makeRepo({}),
+      settings,
+      agent: 'gemini',
+      prompt: 'x'.repeat(20_000),
+      getLaunchPlatform: () => 'linux',
+      toSessionOptions: () => undefined,
+      onPromptCarry
+    })
+    expect(onPromptCarry).toHaveBeenCalledExactlyOnceWith(false)
+    expect(result.followup).toBeUndefined()
+  })
 })
 
 describe('buildWorktreeStartupForDraft agent detection', () => {

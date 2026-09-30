@@ -55,11 +55,16 @@ type CarriedPlanArgs = {
   sensitive?: boolean
 }
 
+export function agentReadsLaunchFile(agent: TuiAgent): boolean {
+  return TUI_AGENT_CONFIG[agent].readsLaunchFile === true
+}
+
 /**
  * Where a launch prompt rides, decided once for every launch path: on the line, which a POSIX host
  * stages when it is long or multi-line; in a launch file named by a pointer when the prompt is past
  * the argv ceiling, sensitive, damaged by a Windows shell, or past cmd's line cap; or, where no
- * launch file can be written (a paired host), left in `followupPrompt` for the paste after ready.
+ * launch file can be written (a paired host) or the agent is not known to read one, left in
+ * `followupPrompt` for the paste after ready.
  */
 export function carryLaunchPrompt<
   A extends CarriedPlanArgs,
@@ -76,7 +81,8 @@ export function carryLaunchPrompt<
     return clean && { ...clean, followupPrompt: text }
   }
   const viaLaunchFile = (): P | null => {
-    if (args.hostWritesLaunchFile === false) {
+    // Why: an agent not measured reading the file would stop on an approval or refuse the path.
+    if (args.hostWritesLaunchFile === false || !agentReadsLaunchFile(args.agent)) {
       return pasteAfterReady()
     }
     const pointer = carryInLaunchFile(text, args.sensitive === true)
@@ -92,8 +98,9 @@ export function carryLaunchPrompt<
   }
   const onLine = buildOnLine(args)
   if (!onLine || readsEnv) {
-    // Hermes reads its prompt from the env and refuses one past that budget, counted in bytes.
-    return !onLine && readsEnv ? viaLaunchFile() : onLine
+    // Hermes reads its prompt from the env and refuses one past that budget, counted in bytes; a
+    // one-character query building proves the budget, not the command, refused it.
+    return !onLine && readsEnv && buildOnLine({ ...args, prompt: '.' }) ? viaLaunchFile() : onLine
   }
   return args.platform === 'win32' && !windowsTypedStartupLineFits(onLine.launchCommand)
     ? viaLaunchFile()

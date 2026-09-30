@@ -128,6 +128,9 @@ export function buildWorktreeStartupForAgent(
     toSessionOptions: (
       preferences?: AgentLaunchPreferences
     ) => Parameters<typeof buildAgentStartupPlan>[0]['sessionOptions'] | undefined
+    /** Set by a caller that pastes an uncarried prompt itself; reports whether it rode the command,
+     *  and no follow-up is returned for it to paste twice. */
+    onPromptCarry?: (carried: boolean) => void
   }
 ): {
   agent: TuiAgent
@@ -153,6 +156,9 @@ export function buildWorktreeStartupForAgent(
   if (!startupPlan) {
     throw new Error(`Could not build launch command for ${agent}.`)
   }
+  if (environment.onPromptCarry && environment.prompt?.trim()) {
+    environment.onPromptCarry(startupPlan.followupPrompt === null)
+  }
   return {
     agent,
     startup: {
@@ -165,7 +171,7 @@ export function buildWorktreeStartupForAgent(
       ...(launchFile ? { launchFile } : {}),
       telemetry: agentStartedTelemetry(agent, environment.launchSource)
     },
-    ...(startupPlan.followupPrompt
+    ...(startupPlan.followupPrompt && !environment.onPromptCarry
       ? {
           followup: {
             expectedProcess: startupPlan.expectedProcess,

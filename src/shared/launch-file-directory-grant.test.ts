@@ -32,11 +32,9 @@ describe('the launch-file directory grant on the agent command line', () => {
     expect(plan?.launchCommand).toBe(`claude '--add-dir=${dir}' '${pointer}'`)
   })
 
-  it('grants Gemini the directory before the flag that carries its prompt', () => {
-    const { plan, pointer, dir } = planWithLaunchFile('gemini')
-    expect(plan?.launchCommand).toBe(
-      `gemini '--include-directories=${dir}' --prompt-interactive '${pointer}'`
-    )
+  it('grants nothing to an agent not measured reading its launch file', () => {
+    const { plan, pointer } = planWithLaunchFile('gemini')
+    expect(plan?.launchCommand).toBe(`gemini --prompt-interactive '${pointer}'`)
   })
 
   it.each([

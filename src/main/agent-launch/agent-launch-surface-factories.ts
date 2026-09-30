@@ -25,7 +25,9 @@ export type AgentLaunchSurfaceFactory = {
     worktreeId: string
     agent: TuiAgent
     options?: Readonly<Record<string, unknown>>
-    /** Only for an agent whose CLI takes the prompt on argv; it rides the launch command. */
+    /** Offered only for an agent whose CLI takes the prompt on argv. It rides the launch command
+     *  unless it needs a launch file the agent is not known to read; `promptRodeLaunchCommand`
+     *  reports which happened. */
     startupPrompt?: string
     /** Replaces the settings default for this launch only; `null` means no arguments at all. */
     agentArgs?: string | null
@@ -41,6 +43,8 @@ export type AgentLaunchSurfaceFactory = {
     /** The pane this create minted; a factory whose runtime reports none omits it, never invents. */
     paneKey?: string
     warning?: string
+    /** Reported by the surface that built the launch command, never predicted by the executor. */
+    promptRodeLaunchCommand?: boolean
   }>
   /**
    * Commits the launch text as the session's first turn, answering with the transcript row's id.
@@ -58,8 +62,8 @@ export type AgentLaunchSurfaceFactory = {
    * Writes the launch text into a terminal agent's live PTY, answering whether it landed.
    *
    * The other half of `startupPrompt`, for the cases the launch command cannot serve: a
-   * `stdin-after-start` agent, whose CLI takes no prompt argument; a prompt the typed line cannot
-   * carry; and a reused terminal, whose process was already running before this launch existed. `false` for every failure, on the same rule the structured
+   * `stdin-after-start` agent, whose CLI takes no prompt argument; a prompt needing a launch file
+   * the agent is not known to read; and a reused terminal, whose process was already running before this launch existed. `false` for every failure, on the same rule the structured
    * twin follows — a launch whose agent is running must not fail because its text did not land.
    */
   deliverTerminalPrompt?(args: {
@@ -104,7 +108,7 @@ export type AgentLaunchWorkspaceFactory = {
      *  must await that gate explicitly instead. */
     startupAgent: TuiAgent | undefined
     /** Offered only alongside a `startupAgent` whose CLI takes the prompt on argv: agent-first
-     *  creation builds the startup command, so that is where the typed line is measured. */
+     *  creation builds the startup command, so that is where the carry is decided. */
     startupPrompt?: string
     /** Inputs needed when this terminal is created as the worktree's startup surface. */
     agentArgs?: string | null
@@ -120,5 +124,7 @@ export type AgentLaunchWorkspaceFactory = {
     startupTerminalPaneKey?: string
     /** Created, but incomplete — surfaced on the launch result rather than dropped. */
     warning?: string
+    /** Reported by the create that built the startup command. */
+    promptRodeLaunchCommand?: boolean
   }>
 }

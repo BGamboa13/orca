@@ -260,6 +260,17 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
       }
       return opts
     }
+    if (opts.startupPrompt?.trim()) {
+      const carried = startupPlan.followupPrompt === null
+      if (!carried && !opts.onStartupPromptCarry) {
+        // Why: this create returns options, not a live PTY, so the prompt would be dropped.
+        throw new Error(
+          `${agent} cannot take this prompt on its command line here, so no terminal was created. ` +
+            'Start the agent without it and paste the prompt once it opens.'
+        )
+      }
+      opts.onStartupPromptCarry?.(carried)
+    }
 
     return {
       ...opts,

@@ -29,6 +29,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     promptInjectionMode: 'argv',
     // Why: default permission mode asks before reading outside the working directories.
     launchFileDirectoryFlag: '--add-dir',
+    readsLaunchFile: true,
     pasteNeedsTypedRequest: true,
     // Why: `claude --prefill <text>` seeds the input without submitting, avoiding the paste-after-ready race (PR https://github.com/stablyai/orca/pull/926).
     draftPromptFlag: '--prefill',
@@ -65,6 +66,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   codex: {
     detectCmd: 'codex',
     promptInjectionMode: 'argv',
+    // Why no grant: every sandbox policy reads the whole disk.
+    readsLaunchFile: true,
     windowsInputRecordPasteNewline: 'alt-enter',
     preflightTrust: 'codex',
     draftPasteReadySignal: 'codex-composer-prompt',
@@ -150,9 +153,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   },
   gemini: {
     detectCmd: 'gemini',
-    promptInjectionMode: 'flag-prompt-interactive',
-    // Why: read_file refuses any path outside the workspace directories.
-    launchFileDirectoryFlag: '--include-directories'
+    promptInjectionMode: 'flag-prompt-interactive'
   },
   antigravity: {
     detectCmd: 'agy',
@@ -162,7 +163,6 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // again — a supervised worker would otherwise always fail at agent_readiness
     // (agent-trust-presets.ts).
     preflightTrust: 'antigravity',
-    launchFileDirectoryFlag: '--add-dir',
     // Why: agy 1.2.x collapses long paste as "↑ N more lines" and expands it over seconds; byte
     // ingest alone (~500 ms on macOS) finishes before the composer is submit-ready.
     submitLineSettleMsPerLine: 45
@@ -226,7 +226,6 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   cursor: {
     detectCmd: 'cursor-agent',
     promptInjectionMode: 'argv',
-    launchFileDirectoryFlag: '--add-dir',
     // Why: first-launch trust menu swallows the bracketed paste; pre-write the .workspace-trusted marker so it skips (agent-trust-presets.ts).
     preflightTrust: 'cursor'
   },

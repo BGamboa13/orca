@@ -101,18 +101,39 @@ describe('a launch prompt on the command line', () => {
     expect(Object.values(startup?.env ?? {})).toContain(multiLine)
   })
 
-  it('points Hermes at a launch file rather than launching clean past its env budget', () => {
+  it('leaves a Hermes prompt past its env budget for the paste after ready', () => {
     const { plan: startup, launchFile } = plan('hermes', 'x'.repeat(30_000))
-    expect(launchFile?.content).toBe('x'.repeat(30_000))
-    expect(Object.values(startup?.env ?? {}).join('')).toContain(launchFile?.placeholder)
+    expect(launchFile).toBeUndefined()
+    expect(startup?.launchCommand).toBe('hermes --tui')
+    expect(startup?.followupPrompt).toBe('x'.repeat(30_000))
   })
 
-  it('points Hermes at a launch file for CJK text under 16,384 chars but past its env bytes', () => {
+  it('leaves CJK Hermes text under 16,384 chars but past its env bytes for the paste', () => {
     const cjk = '修'.repeat(9_000)
     const { plan: startup, launchFile } = plan('hermes', cjk)
-    expect(startup).not.toBeNull()
-    expect(launchFile?.content).toBe(cjk)
-    expect(Object.values(startup?.env ?? {}).join('')).toContain(launchFile?.placeholder)
+    expect(launchFile).toBeUndefined()
+    expect(startup?.followupPrompt).toBe(cjk)
+  })
+
+  it('puts a prompt that needs a launch file there only for an agent measured reading it', () => {
+    const long = 'y'.repeat(MAX_INLINE_LAUNCH_PROMPT_CHARS + 1)
+    expect(plan('claude', long).launchFile?.content).toBe(long)
+    expect(plan('codex', long).launchFile?.content).toBe(long)
+    for (const agent of ['gemini', 'cursor', 'antigravity', 'grok'] as const) {
+      const { plan: startup, launchFile } = plan(agent, long)
+      expect(launchFile).toBeUndefined()
+      expect(startup?.followupPrompt).toBe(long)
+      expect(startup?.launchCommand).not.toContain(long)
+    }
+  })
+
+  it('pastes a Windows-damaged prompt for an agent not measured reading its launch file', () => {
+    const { plan: startup, launchFile } = plan('gemini', 'line one\nline two', {
+      platform: 'win32',
+      shell: 'powershell'
+    })
+    expect(launchFile).toBeUndefined()
+    expect(startup?.followupPrompt).toBe('line one\nline two')
   })
 
   it('leaves a stdin-after-start agent’s prompt for its caller to paste', () => {

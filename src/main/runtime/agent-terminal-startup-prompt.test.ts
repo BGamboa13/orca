@@ -102,16 +102,44 @@ describe('a terminal create that is handed a launch prompt', () => {
     expect(spawn.mock.calls[0]?.[0]?.launchFile).toEqual({ ...launchFile, quoting: 'posix' })
   })
 
-  it('points Hermes at a launch file rather than starting it clean past its env budget', async () => {
+  it('starts an agent clean and says so when its prompt needs a file it is not known to read', async () => {
     const { runtime, spawn } = runtimeWithAgentLaunch()
+    const onStartupPromptCarry = vi.fn()
 
     await runtime.createTerminal('id:wt-1', {
-      startupAgent: 'hermes',
-      startupPrompt: 'x'.repeat(30_000)
+      startupAgent: 'gemini',
+      startupPrompt: 'x'.repeat(30_000),
+      onStartupPromptCarry
     })
 
-    expect(spawn).toHaveBeenCalledTimes(1)
-    expect(spawn.mock.calls[0]?.[0]?.launchFile?.content).toBe('x'.repeat(30_000))
+    expect(onStartupPromptCarry).toHaveBeenCalledExactlyOnceWith(false)
+    expect(spawn.mock.calls[0]?.[0]?.launchFile).toBeUndefined()
+    expect(spawnedCommand(spawn)).not.toContain('x'.repeat(100))
+  })
+
+  it('refuses such a prompt when the caller cannot paste it, rather than dropping it', async () => {
+    const { runtime, spawn } = runtimeWithAgentLaunch()
+
+    await expect(
+      runtime.createTerminal('id:wt-1', {
+        startupAgent: 'hermes',
+        startupPrompt: 'x'.repeat(30_000)
+      })
+    ).rejects.toThrow(/cannot take this prompt on its command line/)
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it('reports a prompt carried once it rides the command or a launch file', async () => {
+    const { runtime } = runtimeWithAgentLaunch()
+    const onStartupPromptCarry = vi.fn()
+
+    await runtime.createTerminal('id:wt-1', {
+      startupAgent: 'claude',
+      startupPrompt: 'y'.repeat(30_000),
+      onStartupPromptCarry
+    })
+
+    expect(onStartupPromptCarry).toHaveBeenCalledExactlyOnceWith(true)
   })
 
   it('still builds a bare agent launch when no prompt is handed to it', async () => {

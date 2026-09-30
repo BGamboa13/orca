@@ -47,6 +47,7 @@ export function agentLaunchWorkspaceFactory(
       options
     }) => {
       const startupLaunchPreferences = toAgentLaunchPreferences(options)
+      let promptRodeLaunchCommand = false
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: already validated by `AgentLaunch`; the executor only removed the reserved agent fields, so the rest of the payload is the parsed shape.
       const params = create as WorktreeCreateParams
       const { runtime } = context
@@ -65,7 +66,8 @@ export function agentLaunchWorkspaceFactory(
               ...params,
               ...(startupAgent ? { startupAgent } : {}),
               // Only ever set alongside `startupAgent`, which is what the create requires; the
-              // executor passes it only to an agent that takes its prompt on argv.
+              // executor offers it only to an agent that takes its prompt on argv, and it rides
+              // unless it needs a launch file the agent is not known to read.
               ...(startupPrompt ? { startupPrompt } : {})
             },
             {
@@ -79,6 +81,13 @@ export function agentLaunchWorkspaceFactory(
             context.clientKind ? { clientKind: context.clientKind } : {}
           ),
           ...(agentArgs !== undefined ? { startupAgentArgs: agentArgs } : {}),
+          ...(startupPrompt
+            ? {
+                onStartupPromptCarry: (carried: boolean) => {
+                  promptRodeLaunchCommand = carried
+                }
+              }
+            : {}),
           ...(cwd ? { startupCwd: cwd } : {}),
           ...(launchSource ? { startupLaunchSource: launchSource } : {}),
           ...(paneKey ? { startupPaneKey: paneKey } : {}),
@@ -99,6 +108,7 @@ export function agentLaunchWorkspaceFactory(
         return {
           worktreeId: result.worktree.id,
           startupTerminalHandle: result.startupTerminal?.handle,
+          ...(promptRodeLaunchCommand ? { promptRodeLaunchCommand } : {}),
           ...(result.startupTerminal?.paneKey
             ? { startupTerminalPaneKey: result.startupTerminal.paneKey }
             : {}),

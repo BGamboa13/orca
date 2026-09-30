@@ -302,7 +302,7 @@ describe('launchAgentInNewTab', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     launchAgentInNewTab({
-      agent: 'grok',
+      agent: 'codex',
       worktreeId: 'wt-1',
       prompt: 'y'.repeat(20_000),
       promptDelivery: 'submit-after-ready'

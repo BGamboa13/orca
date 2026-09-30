@@ -163,7 +163,7 @@ describe('hermes startup plans', () => {
     ).toBeNull()
   })
 
-  it('points a Hermes query past the safe Windows environment limit at a launch file', () => {
+  it('leaves a Hermes query past the safe Windows environment limit for the paste', () => {
     const plan = buildAgentStartupPlan({
       agent: 'hermes',
       prompt: 'x'.repeat(24_000),
@@ -171,8 +171,8 @@ describe('hermes startup plans', () => {
       platform: 'win32'
     })
 
-    expect(plan?.launchFile?.content).toBe('x'.repeat(24_000))
-    expect(Object.values(plan?.env ?? {}).join('')).toContain(plan?.launchFile?.placeholder)
+    expect(plan?.launchFile).toBeUndefined()
+    expect(plan?.followupPrompt).toBe('x'.repeat(24_000))
   })
 
   it.each(['quote "this"', 'print %PATH%', 'toggle !feature!', 'inspect C:\\repo\\'])(
@@ -205,7 +205,7 @@ describe('hermes startup plans', () => {
     )
   })
 
-  it('measures POSIX Hermes query limits in UTF-8 bytes, pointing past them at a launch file', () => {
+  it('measures POSIX Hermes query limits in UTF-8 bytes, pasting past them', () => {
     const plan = buildAgentStartupPlan({
       agent: 'hermes',
       prompt: '界'.repeat(9_000),
@@ -213,7 +213,8 @@ describe('hermes startup plans', () => {
       platform: 'linux'
     })
 
-    expect(plan?.launchFile?.content).toBe('界'.repeat(9_000))
+    expect(plan?.launchFile).toBeUndefined()
+    expect(plan?.followupPrompt).toBe('界'.repeat(9_000))
   })
 
   it('keeps empty Hermes launches on the interactive TUI command', () => {

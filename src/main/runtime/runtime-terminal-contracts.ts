@@ -47,9 +47,13 @@ export type TerminalCreateOptions = {
    * argument. Not a general prompt channel: an agent that takes its text only after start has no
    * launch command to carry it, and a caller that sets this for one is refused rather than having
    * the prompt silently dropped. It rides that command, directly or as a pointer to a launch file
-   * (`startup-line-prompt-carry`).
+   * (`startup-line-prompt-carry`), unless it needs a launch file the agent is not known to read:
+   * then the agent starts clean, `onStartupPromptCarry` says so, and the caller pastes it once
+   * ready. A caller with no such callback is refused instead.
    */
   startupPrompt?: string
+  /** Main-internal: whether `startupPrompt` rode the launch command. Called once the plan is built. */
+  onStartupPromptCarry?: (carried: boolean) => void
   /** Written by the execution host before the launch line naming it is typed (`startupPrompt`
    *  carries its pointer). */
   launchFile?: LaunchFile
