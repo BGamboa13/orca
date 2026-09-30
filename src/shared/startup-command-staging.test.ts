@@ -86,16 +86,28 @@ describe('stageStartupCommand', () => {
 
   // Why: typed raw, tcsh runs a prompt's second line as a command and MAX_CANON cuts a long one.
   it.each([['/usr/bin/nu'], ['/bin/tcsh'], ['/usr/local/bin/pwsh'], [undefined]])(
-    'runs the script through /bin/sh for a shell that cannot source it (%s)',
+    'runs an Orca-built launch line through /bin/sh for a shell that cannot source it (%s)',
     (shellPath) => {
       const staged = stageStartupCommand({
         command: `claude 'one\ntwo'`,
         shellPath,
+        orcaBuiltLine: true,
         platform: 'darwin',
         directory
       })
       expect(staged.delivery).toBe('staged')
       expect(staged.command).toBe(`/bin/sh '${staged.scriptPath}'`)
+    }
+  )
+
+  // Why: a quick command or --command written for tcsh or nu is not sh syntax.
+  it.each([['/bin/tcsh'], ['/usr/bin/nu'], [undefined]])(
+    'types a command the user wrote as it always was in a shell that cannot source it (%s)',
+    (shellPath) => {
+      const command = `foreach f (*.log)\n  echo $f\nend`
+      const staged = stageStartupCommand({ command, shellPath, platform: 'darwin', directory })
+      expect(staged).toEqual({ command, delivery: 'typed' })
+      expect(readdirSync(directory)).toEqual([])
     }
   )
 

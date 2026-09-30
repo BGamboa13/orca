@@ -186,7 +186,11 @@ export function activateLocalPtySession(args: {
         shellName: spawnedShellName,
         waitsForShellReady: plan.shellReadyLaunch?.supportsReadyMarker === true
       })
-    staging = stageStartupCommand({ command: spawn.command, shellPath: plan.shellPath })
+    staging = stageStartupCommand({
+      command: spawn.command,
+      shellPath: plan.shellPath,
+      orcaBuiltLine: spawn.launchAgent !== undefined
+    })
     const notice = startupStagingFailureNotice(staging)
     if (notice) {
       startupIngress.accept(notice)

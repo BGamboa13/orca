@@ -35,7 +35,8 @@ export type StartupCommandStaging = {
 }
 
 // Why only these source the script: the staged body is Orca's portable quoting, verified literal in
-// these. Any other shell (tcsh, nu, xonsh, pwsh...) runs the POSIX body through `/bin/sh` instead.
+// these. Any other shell (tcsh, nu, xonsh, pwsh...) runs an agent launch line Orca built through
+// `/bin/sh` instead; a command the user wrote for that shell is typed as it always was.
 const STAGING_SHELLS = new Set(['bash', 'zsh', 'sh', 'dash', 'fish', 'ksh', 'mksh'])
 
 const encoder = new TextEncoder()
@@ -64,8 +65,13 @@ export function shouldStageStartupCommand(args: {
   command: string
   shellPath: string | undefined
   platform: NodeJS.Platform
+  /** An agent launch line Orca built with POSIX quoting, which sh can run in any shell. */
+  orcaBuiltLine?: boolean
 }): boolean {
   if (args.platform === 'win32') {
+    return false
+  }
+  if (stagingShellName(args.shellPath) === null && args.orcaBuiltLine !== true) {
     return false
   }
   const body = stripSubmitTerminator(args.command)
@@ -79,6 +85,7 @@ let staleSweepStarted = false
 export function stageStartupCommand(args: {
   command: string
   shellPath: string | undefined
+  orcaBuiltLine?: boolean
   platform?: NodeJS.Platform
   directory?: string
 }): StartupCommandStaging {
