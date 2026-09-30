@@ -34,8 +34,9 @@ export type StartupCommandStaging = {
   failure?: string
 }
 
-// Why only these: the staged body is Orca's portable quoting, verified literal in exactly these five.
-const STAGING_SHELLS = new Set(['bash', 'zsh', 'sh', 'dash', 'fish'])
+// Why only these source the script: the staged body is Orca's portable quoting, verified literal in
+// these. Any other shell (tcsh, nu, xonsh, pwsh...) runs the POSIX body through `/bin/sh` instead.
+const STAGING_SHELLS = new Set(['bash', 'zsh', 'sh', 'dash', 'fish', 'ksh', 'mksh'])
 
 const encoder = new TextEncoder()
 
@@ -64,7 +65,7 @@ export function shouldStageStartupCommand(args: {
   shellPath: string | undefined
   platform: NodeJS.Platform
 }): boolean {
-  if (args.platform === 'win32' || stagingShellName(args.shellPath) === null) {
+  if (args.platform === 'win32') {
     return false
   }
   const body = stripSubmitTerminator(args.command)
@@ -113,7 +114,10 @@ export function stageStartupCommand(args: {
     }
   }
   return {
-    command: `${shellName === 'fish' ? 'source' : '.'} ${quotedPath}`,
+    command:
+      shellName === null
+        ? `/bin/sh ${quotedPath}`
+        : `${shellName === 'fish' ? 'source' : '.'} ${quotedPath}`,
     delivery: 'staged',
     scriptPath
   }

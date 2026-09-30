@@ -42,6 +42,9 @@ function discoverShells(): LiveShell[] {
   add('dash', '/bin/dash', ['-i'])
   add('dash', '/usr/bin/dash', ['-i'])
   add('sh', '/bin/sh', ['-i'])
+  add('ksh', '/bin/ksh', ['-i'])
+  // Why tcsh: no staging shell; its line runs the POSIX script through /bin/sh.
+  add('tcsh', '/bin/tcsh', ['-f', '-i'])
   const fish = resolveFishBinary(3)
   if (fish.available) {
     // Why absolute: the sandbox PATH would not resolve a bare `fish`.

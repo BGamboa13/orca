@@ -79,16 +79,23 @@ describe('stageStartupCommand', () => {
     expect(stage('a'.repeat(600), '-zsh').delivery).toBe('staged')
   })
 
-  it.each([['/usr/bin/nu'], ['/bin/tcsh'], ['/bin/ksh'], [undefined]])(
-    'types in full for a shell whose quoting it has not verified (%s)',
+  it('sources the script in ksh like sh', () => {
+    const staged = stage('a'.repeat(600), '/bin/ksh')
+    expect(staged.command).toBe(`. '${staged.scriptPath}'`)
+  })
+
+  // Why: typed raw, tcsh runs a prompt's second line as a command and MAX_CANON cuts a long one.
+  it.each([['/usr/bin/nu'], ['/bin/tcsh'], ['/usr/local/bin/pwsh'], [undefined]])(
+    'runs the script through /bin/sh for a shell that cannot source it (%s)',
     (shellPath) => {
       const staged = stageStartupCommand({
-        command: 'a'.repeat(600),
+        command: `claude 'one\ntwo'`,
         shellPath,
         platform: 'darwin',
         directory
       })
-      expect(staged.delivery).toBe('typed')
+      expect(staged.delivery).toBe('staged')
+      expect(staged.command).toBe(`/bin/sh '${staged.scriptPath}'`)
     }
   )
 
