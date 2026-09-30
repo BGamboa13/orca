@@ -2,7 +2,6 @@
 // v38 stages long startup commands as sourced scripts; older owners stay attachable.
 // Why skip 37: main's Codex launch change already ships as 37, so the two must never share a number.
 export const PROTOCOL_VERSION = 38
-export const STAGED_STARTUP_COMMAND_DAEMON_PROTOCOL_VERSION = 38
 export const CONTENT_ADDRESSED_SHELL_WRAPPER_DAEMON_PROTOCOL_VERSION = 36
 export const ASYNC_CWD_VALIDATION_DAEMON_PROTOCOL_VERSION = 35
 export const CODEX_SHELL_LAUNCH_PREFLIGHT_DAEMON_PROTOCOL_VERSION = 34

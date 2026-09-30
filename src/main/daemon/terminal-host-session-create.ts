@@ -206,10 +206,14 @@ async function spawnAndPublishSession(
   if (startupCommandWritten && opts.command) {
     staging = stageStartupCommand({ command: opts.command, shellPath: subprocess.shellPath })
     if (staging.failure) {
-      deps.reportReadinessEvent?.('startup-command-stage-failed', {
-        sessionId: opts.sessionId,
-        reason: staging.failure
-      })
+      try {
+        deps.reportReadinessEvent?.('startup-command-stage-failed', {
+          sessionId: opts.sessionId,
+          reason: staging.failure
+        })
+      } catch {
+        // Diagnostics must never turn a live PTY into a failed create.
+      }
     }
     const submit = process.platform === 'win32' ? '\r' : '\n'
     // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
