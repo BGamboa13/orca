@@ -132,7 +132,7 @@ export async function pasteDraftWhenAgentReady(args: {
     onUnconfirmedDelivery?.()
   }
 
-  return await sendBracketedPasteToAgent({
+  const sent = await sendBracketedPasteToAgent({
     settings,
     ptyId,
     content,
@@ -141,6 +141,11 @@ export async function pasteDraftWhenAgentReady(args: {
     // Why launch: this delivers the prompt or draft an agent is started with.
     inputKind: 'launch'
   })
+  if (!sent) {
+    // Why: a write that never landed drops the text as surely as a readiness timeout.
+    onTimeout?.()
+  }
+  return sent
 }
 
 export async function pasteDraftToAgentPtyWhenReady(args: {
@@ -186,7 +191,7 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
     onUnconfirmedDelivery?.()
   }
 
-  return await sendBracketedPasteToAgent({
+  const sent = await sendBracketedPasteToAgent({
     settings,
     ptyId,
     content,
@@ -195,6 +200,11 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
     // Why launch: this delivers the prompt or draft an agent is started with.
     inputKind: 'launch'
   })
+  if (!sent) {
+    // Why: a write that never landed drops the text as surely as a readiness timeout.
+    onTimeout?.()
+  }
+  return sent
 }
 
 export async function submitPromptToAgentPty(args: {

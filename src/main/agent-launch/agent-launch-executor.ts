@@ -216,7 +216,7 @@ async function resolveWorkspace(
   startupTerminalHandle: string | undefined
   startupTerminalPaneKey?: string
   warning?: string
-  /** True when this create folded the prompt into the agent's startup command. */
+  /** True when this create put the prompt on the agent's startup command. */
   promptRodeLaunchCommand?: boolean
 }> {
   const { intent } = execution
@@ -241,10 +241,9 @@ async function resolveWorkspace(
   })
   // Only when a startup terminal actually came back: a create that produced none ran no command,
   // so nothing carried the prompt and the launch still owes it to whatever surface it builds next.
-  const { promptRodeLaunchCommand, ...rest } = created
-  return rest.startupTerminalHandle && promptRodeLaunchCommand
-    ? { ...rest, promptRodeLaunchCommand: true }
-    : rest
+  return created.startupTerminalHandle && startupPrompt
+    ? { ...created, promptRodeLaunchCommand: true }
+    : created
 }
 
 /** `structured` is the same surface `outcome` names, kept typed so prompt delivery reads the create's
@@ -253,7 +252,7 @@ export type CreatedSurface = {
   outcome: AgentLaunchResult['outcome']
   warning?: string
   structured?: AgentLaunchStructuredSurface
-  /** True when this create folded the prompt into the agent's launch command. */
+  /** True when this create put the prompt on the agent's launch command. */
   promptRodeLaunchCommand?: boolean
 }
 
@@ -347,7 +346,7 @@ async function createTerminalSurface(
       ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {})
     },
     ...(terminal.warning ? { warning: terminal.warning } : {}),
-    ...(startupPrompt && terminal.promptRodeLaunchCommand ? { promptRodeLaunchCommand: true } : {})
+    ...(startupPrompt ? { promptRodeLaunchCommand: true } : {})
   }
 }
 

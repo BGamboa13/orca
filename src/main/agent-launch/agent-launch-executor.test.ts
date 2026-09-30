@@ -27,12 +27,8 @@ function harness(options: {
   structuredCreateError?: Error
   deliveredMessageId?: string | null
   terminalPromptDelivered?: boolean
-  /** Whether the surface reports that its typed line took the offered prompt. */
-  lineCarriesPrompt?: boolean
 }) {
   const calls: string[] = []
-  const carried = (startupPrompt: string | undefined) =>
-    startupPrompt && (options.lineCarriesPrompt ?? true) ? { promptRodeLaunchCommand: true } : {}
   const createWorktree = vi.fn(
     async (args: {
       create: Record<string, unknown>
@@ -42,8 +38,7 @@ function harness(options: {
       calls.push(`createWorktree(startupAgent=${String(args.startupAgent)})`)
       return {
         worktreeId: 'wt-new',
-        startupTerminalHandle: args.startupAgent ? 'term_agent_first' : undefined,
-        ...carried(args.startupPrompt)
+        startupTerminalHandle: args.startupAgent ? 'term_agent_first' : undefined
       }
     }
   )
@@ -61,9 +56,9 @@ function harness(options: {
     }
     return { sessionId: 'sess-1', handle: 'handle_structured', fence: 4 }
   })
-  const createTerminalAgent = vi.fn(async (args: { startupPrompt?: string }) => {
+  const createTerminalAgent = vi.fn(async (_args: { startupPrompt?: string }) => {
     calls.push('createTerminalAgent')
-    return { handle: 'term_1', ...carried(args.startupPrompt) }
+    return { handle: 'term_1' }
   })
   const deliverStructuredPrompt = vi.fn(async () => {
     calls.push('deliverStructuredPrompt')
@@ -355,37 +350,22 @@ describe('delivering a launch prompt to a terminal agent', () => {
     expect(h.deliverTerminalPrompt).not.toHaveBeenCalled()
   })
 
-  it('pastes an argv agent’s prompt after start when the surface reports its typed line could not carry it', async () => {
-    const h = harness({
-      createSupport: { supported: false, reason: 'wsl' },
-      lineCarriesPrompt: false
-    })
-    const result = await h.run({ ...CREATE_INTENT, prompt: SUBMIT })
+  it('never pastes an argv agent’s prompt, however long: its launch command carries it', async () => {
+    const h = harness({ createSupport: { supported: false, reason: 'wsl' } })
+    const long = { delivery: 'submit' as const, text: `line one\n${'x'.repeat(20_000)}` }
+    const result = await h.run({ ...CREATE_INTENT, prompt: long })
 
     expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
-    // Offered to the launch command; the surface, not the executor, decided it did not ride.
-    expect(h.createTerminalAgent.mock.calls[0]?.[0]).toMatchObject({
-      startupPrompt: 'do the thing'
-    })
-    expect(h.deliverTerminalPrompt).toHaveBeenCalledWith({
-      handle: 'term_1',
-      agent: 'claude',
-      freshLaunch: true,
-      prompt: SUBMIT
-    })
+    expect(h.createTerminalAgent.mock.calls[0]?.[0]).toMatchObject({ startupPrompt: long.text })
+    expect(h.deliverTerminalPrompt).not.toHaveBeenCalled()
   })
 
-  it('pastes into an agent-first create’s startup terminal when its typed line could not carry the prompt', async () => {
-    const h = harness({ settings: null, lineCarriesPrompt: false })
+  it('never pastes into an agent-first create’s startup terminal that took the prompt', async () => {
+    const h = harness({ settings: null })
     const result = await h.run({ ...CREATE_INTENT, prompt: SUBMIT })
 
     expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
-    expect(h.deliverTerminalPrompt).toHaveBeenCalledWith({
-      handle: 'term_agent_first',
-      agent: 'claude',
-      freshLaunch: true,
-      prompt: SUBMIT
-    })
+    expect(h.deliverTerminalPrompt).not.toHaveBeenCalled()
   })
 
   it('writes into a reused terminal, whose process started before the launch existed', async () => {

@@ -35,18 +35,6 @@ export type AgentLaunchRuntimeStubOptions = {
   startupTerminalPaneKey?: string
   /** The reserved pane is already live, so a create that requires a fresh pane is refused. */
   terminalPaneAlreadyLive?: boolean
-  /** What the runtime reports about an offered prompt's typed line; unset reports nothing. */
-  lineCarriesPrompt?: boolean
-}
-
-function reportPromptCarry(
-  options: AgentLaunchRuntimeStubOptions,
-  report: unknown,
-  offered: unknown
-): void {
-  if (typeof report === 'function' && offered && options.lineCarriesPrompt !== undefined) {
-    report(options.lineCarriesPrompt)
-  }
 }
 
 export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
@@ -79,7 +67,6 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
     ),
     showRepo: vi.fn(async () => ({ id: 'repo-1' })),
     createManagedWorktree: vi.fn(async (args: Record<string, unknown>) => {
-      reportPromptCarry(options, args.onStartupPromptCarry, args.startupPrompt)
       return {
         worktree: { id: 'wt-new' },
         startupTerminal: args.startupAgent
@@ -97,7 +84,6 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
       if (options.terminalPaneAlreadyLive && createOptions?.requireFreshPane === true) {
         throw new AgentLaunchPaneAlreadyLiveError()
       }
-      reportPromptCarry(options, createOptions?.onStartupPromptCarry, createOptions?.startupPrompt)
       return {
         handle: 'term_1',
         ...(options.terminalPaneKey ? { paneKey: options.terminalPaneKey } : {}),

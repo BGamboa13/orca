@@ -647,6 +647,11 @@
                   "message": "The agent started, but your prompt wasn't sent. Copy it and paste it once the agent is ready.",
                   "copy": "Copy prompt"
                 }
+              },
+              "started": {
+                "notice": {
+                  "message": "The agent wasn't started: Orca couldn't write the file that carries your prompt. Copy the prompt and launch again."
+                }
               }
             }
           }

@@ -5,15 +5,15 @@
  * surface exists and in what order; everything here decides how the text reaches whichever surface
  * that turned out to be, and each surface takes it differently:
  *
- *   structured session   ->  committed to the transcript, named by a message id  ->  journaled
- *   terminal, line fits  ->  folded into the command that execs the agent        ->  handed-to-terminal
- *   terminal, otherwise  ->  bracketed paste into the live PTY once it is ready  ->  handed-to-terminal
- *   anything unproven    ->                                                      ->  not-delivered
+ *   structured session  ->  committed to the transcript, named by a message id  ->  journaled
+ *   terminal, argv CLI  ->  on the command that execs the agent                 ->  handed-to-terminal
+ *   terminal, otherwise ->  bracketed paste into the live PTY once it is ready  ->  handed-to-terminal
+ *   anything unproven   ->                                                      ->  not-delivered
  *
- * argv has no readiness race, so it is offered wherever the agent's CLI takes a prompt argument
- * (`agentPromptRidesLaunchCommand`). But that command is TYPED into the user's shell, and a long or
- * multi-line typed line fails in ways argv itself does not, so whether the offer was taken is decided
- * where the line is built (`startup-line-prompt-carry`) and reported back, never predicted here.
+ * argv has no readiness race, so it carries the prompt wherever the agent's CLI takes a prompt
+ * argument (`agentPromptRidesLaunchCommand`). The host that types that command stages a line too
+ * long or multi-line to type, and a Windows host points it at a launch file instead
+ * (`startup-line-prompt-carry`), so the prompt never has to wait for a ready TUI.
  */
 
 import type {
@@ -38,7 +38,7 @@ export async function settleLaunchPromptDisposal(
     const messageId = await deliverStructuredLaunchPrompt(execution, created.structured)
     return messageId ? { outcome: 'journaled', messageId } : NOT_DELIVERED
   }
-  // The surface reported that the startup command carried the prompt; there is nothing left to write.
+  // The startup command carried the prompt; there is nothing left to write.
   if (created.promptRodeLaunchCommand) {
     return HANDED_TO_TERMINAL
   }
@@ -102,10 +102,8 @@ function launchSubmitText(intent: AgentLaunchIntent): string | undefined {
   return intent.prompt?.delivery === 'submit' && intent.prompt.text ? intent.prompt.text : undefined
 }
 
-/**
- * The prompt offered to a terminal's launch command, which is an argv-mode agent's and only an
- * argv-mode agent's. An offer, not a decision: the surface reports whether the typed line took it.
- */
+/** The prompt a terminal's launch command carries, which is an argv-mode agent's and only an
+ *  argv-mode agent's. */
 export function argvLaunchPrompt(intent: AgentLaunchIntent): string | undefined {
   const text = launchSubmitText(intent)
   return text && agentPromptRidesLaunchCommand(intent.agent) ? text : undefined

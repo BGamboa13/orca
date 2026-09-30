@@ -410,6 +410,11 @@
                   "message": "El agente se inició, pero tu prompt no se envió. Cópialo y pégalo cuando el agente esté listo.",
                   "copy": "Copiar prompt"
                 }
+              },
+              "started": {
+                "notice": {
+                  "message": "El agente no se inició: Orca no pudo escribir el archivo que contiene tu prompt. Copia el prompt e inícialo de nuevo."
+                }
               }
             }
           }

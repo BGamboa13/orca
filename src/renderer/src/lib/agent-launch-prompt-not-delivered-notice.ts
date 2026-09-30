@@ -12,26 +12,44 @@ export function showAgentLaunchPromptNotDeliveredNotice(args: {
   agent: TuiAgent
   prompt: string
 }): void {
-  toast.message(
+  showPromptCopyNotice(
     translate(
       'auto.lib.agent.launch.prompt.not.delivered.notice.message',
       "The agent started, but your prompt wasn't sent. Copy it and paste it once the agent is ready."
     ),
-    {
-      // The action is the only copy of the prompt, so the notice stays until the user dismisses it.
-      duration: Infinity,
-      action: {
-        label: translate('auto.lib.agent.launch.prompt.not.delivered.notice.copy', 'Copy prompt'),
-        onClick: () => {
-          void window.api.ui.writeClipboardText(args.prompt).catch((error: unknown) => {
-            console.error('Could not copy the launch prompt', error)
-          })
-        }
-      }
-    }
+    args.prompt
   )
   track('agent_error', {
     error_class: 'paste_readiness_timeout',
     agent_kind: tuiAgentToAgentKind(args.agent)
+  })
+}
+
+/**
+ * The host refused to start the agent because it could not write the launch file that carries the
+ * prompt. Nothing ran, so the user is handed the text to launch again with.
+ */
+export function showAgentLaunchNotStartedNotice(args: { prompt: string }): void {
+  showPromptCopyNotice(
+    translate(
+      'auto.lib.agent.launch.prompt.not.started.notice.message',
+      "The agent wasn't started: Orca couldn't write the file that carries your prompt. Copy the prompt and launch again."
+    ),
+    args.prompt
+  )
+}
+
+function showPromptCopyNotice(message: string, prompt: string): void {
+  toast.message(message, {
+    // The action is the only copy of the prompt, so the notice stays until the user dismisses it.
+    duration: Infinity,
+    action: {
+      label: translate('auto.lib.agent.launch.prompt.not.delivered.notice.copy', 'Copy prompt'),
+      onClick: () => {
+        void window.api.ui.writeClipboardText(prompt).catch((error: unknown) => {
+          console.error('Could not copy the launch prompt', error)
+        })
+      }
+    }
   })
 }

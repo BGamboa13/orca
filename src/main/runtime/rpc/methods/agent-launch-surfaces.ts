@@ -122,21 +122,12 @@ export function agentLaunchSurfaceFactory(
       options
     }) => {
       const launchPreferences = toAgentLaunchPreferences(options)
-      let promptRodeLaunchCommand = false
       const created = context.runtime.createTerminal(`id:${worktreeId}`, {
         // The agent id is not a shell command — `cursor` is the desktop app, its CLI is
         // `cursor-agent` — so the runtime builds the configured launcher.
         startupAgent: agent,
-        // Offered to that launcher's startup plan; it rides only when the typed line can carry it,
-        // and the runtime reports which so an uncarried prompt is pasted once the agent is ready.
-        ...(startupPrompt
-          ? {
-              startupPrompt,
-              onStartupPromptCarry: (carried: boolean) => {
-                promptRodeLaunchCommand = carried
-              }
-            }
-          : {}),
+        // Rides that launcher's command line, directly or as a pointer to a host-written file.
+        ...(startupPrompt ? { startupPrompt } : {}),
         ...(agentArgs !== undefined ? { agentArgs } : {}),
         ...(cwd ? { cwd } : {}),
         // The model the user picked outranks configured args here too, as it does on a chat.
@@ -155,8 +146,7 @@ export function agentLaunchSurfaceFactory(
         // dropping it here was what left a client with no way to name the tab it just asked for.
         ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {}),
         // Its only warning is that the host could not reveal the tab, which the caller shows itself.
-        ...(terminal.warning && !callerPresentsSurface ? { warning: terminal.warning } : {}),
-        ...(promptRodeLaunchCommand ? { promptRodeLaunchCommand } : {})
+        ...(terminal.warning && !callerPresentsSurface ? { warning: terminal.warning } : {})
       }
     },
     deliverTerminalPrompt: async ({ handle, agent, freshLaunch, prompt }) =>

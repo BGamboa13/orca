@@ -8,13 +8,12 @@
  * by the host that owns the PTY, at the moment it accepts the spawn.
  */
 import { randomBytes } from 'node:crypto'
-import { readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, posix } from 'node:path'
 import { quoteStartupArg } from './tui-agent-startup-shell'
-
-/** Half of macOS MAX_CANON: a typed line this long survived every canonical-mode write measured. */
-export const TYPED_STARTUP_COMMAND_BUDGET_BYTES = 512
+import { typedStartupLineFits } from './typed-startup-line'
+import type { WslLaunchDirectory } from './wsl-launch-directory'
 
 export const STAGED_STARTUP_COMMAND_PREFIX = 'orca-launch-'
 
@@ -39,22 +38,9 @@ export type StartupCommandStaging = {
 // `/bin/sh` instead; a command the user wrote for that shell is typed as it always was.
 const STAGING_SHELLS = new Set(['bash', 'zsh', 'sh', 'dash', 'fish', 'ksh', 'mksh'])
 
-const encoder = new TextEncoder()
-
 export function stagingShellName(shellPath: string | undefined): string | null {
   const name = shellPath?.split('/').pop()?.replace(/^-/, '').toLowerCase()
   return name && STAGING_SHELLS.has(name) ? name : null
-}
-
-/** Any C0 byte or DEL: no quoter escapes them, so a line editor reads them as keys. */
-function hasControlByte(line: string): boolean {
-  for (let i = 0; i < line.length; i += 1) {
-    const code = line.charCodeAt(i)
-    if (code < 0x20 || code === 0x7f) {
-      return true
-    }
-  }
-  return false
 }
 
 function stripSubmitTerminator(command: string): string {
@@ -76,13 +62,10 @@ export function shouldStageStartupCommand(args: {
     // quoted backslash and expands `!!`), so another shell only ever sees the script's inert path.
     return args.orcaBuiltLine === true
   }
-  const body = stripSubmitTerminator(args.command)
-  return (
-    hasControlByte(body) || encoder.encode(body).byteLength > TYPED_STARTUP_COMMAND_BUDGET_BYTES
-  )
+  return !typedStartupLineFits(stripSubmitTerminator(args.command))
 }
 
-let staleSweepStarted = false
+const sweptDirectories = new Set<string>()
 
 export function stageStartupCommand(args: {
   command: string
@@ -90,24 +73,31 @@ export function stageStartupCommand(args: {
   orcaBuiltLine?: boolean
   platform?: NodeJS.Platform
   directory?: string
+  /** A WSL session stages like a POSIX host: written over UNC, sourced by its Linux path. */
+  wslDirectory?: WslLaunchDirectory
 }): StartupCommandStaging {
-  const platform = args.platform ?? process.platform
+  const wsl = args.wslDirectory
+  const platform = wsl ? 'linux' : (args.platform ?? process.platform)
   if (!shouldStageStartupCommand({ ...args, platform })) {
     return { command: args.command, delivery: 'typed' }
   }
-  const directory = args.directory ?? tmpdir()
-  if (!staleSweepStarted) {
-    staleSweepStarted = true
+  const directory = wsl?.windowsPath ?? args.directory ?? tmpdir()
+  if (!sweptDirectories.has(directory)) {
+    sweptDirectories.add(directory)
     // Why deferred: the sweep is crash recovery and must never delay this launch.
     setTimeout(() => sweepStaleStagedStartupCommands({ directory }), 0).unref?.()
   }
   const shellName = stagingShellName(args.shellPath)
-  const scriptPath = join(
-    directory,
-    `${STAGED_STARTUP_COMMAND_PREFIX}${randomBytes(8).toString('hex')}.sh`
+  const scriptName = `${STAGED_STARTUP_COMMAND_PREFIX}${randomBytes(8).toString('hex')}.sh`
+  const scriptPath = join(directory, scriptName)
+  const quotedPath = quoteStartupArg(
+    wsl ? posix.join(wsl.linuxPath, scriptName) : scriptPath,
+    'posix'
   )
-  const quotedPath = quoteStartupArg(scriptPath, 'posix')
   try {
+    if (wsl) {
+      mkdirSync(directory, { recursive: true })
+    }
     // Why rm first: the shell keeps reading the open file, so the prompt-bearing script is gone
     // before the agent starts, however long it runs.
     writeFileSync(

@@ -9,7 +9,11 @@
 
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { showAgentLaunchPromptNotDeliveredNotice } from '@/lib/agent-launch-prompt-not-delivered-notice'
+import {
+  showAgentLaunchNotStartedNotice,
+  showAgentLaunchPromptNotDeliveredNotice
+} from '@/lib/agent-launch-prompt-not-delivered-notice'
+import { isLaunchFileUnavailableMessage } from '../../../shared/launch-prompt-file'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { getConnectionIdFromState } from '@/lib/connection-context'
@@ -41,7 +45,7 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 
-/** The host waits up to 60 s for the agent before pasting; the reply must outlive that. */
+/** For an agent without a launch-line prompt the host waits up to 60 s before pasting; the reply must outlive that. */
 const PROMPTED_AGENT_LAUNCH_TIMEOUT_MS = 90_000
 /** One send and two replays under the same operation id, the renderer's create budget plus one. */
 const MAX_LAUNCH_ATTEMPTS = 3
@@ -265,7 +269,11 @@ export function settleSourceControlAgentLaunch(
     return { started: false, promptDelivered: false, failureNotified: true }
   }
   if (result.kind !== 'launched') {
-    toast.error(result.message)
+    if (result.kind === 'failed' && isLaunchFileUnavailableMessage(result.message)) {
+      showAgentLaunchNotStartedNotice({ prompt: args.prompt })
+    } else {
+      toast.error(result.message)
+    }
     return { started: false, promptDelivered: false, failureNotified: true }
   }
   if (result.warning) {

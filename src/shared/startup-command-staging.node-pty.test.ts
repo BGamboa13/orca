@@ -21,6 +21,8 @@ import { join } from 'node:path'
 import * as pty from 'node-pty'
 import { afterAll, describe, expect, it } from 'vitest'
 import { resolveFishBinary } from './fish-binary-requirement'
+import { writeLaunchFile, type WrittenLaunchFile } from './launch-file-writing'
+import { buildLaunchFilePointer, planLaunchPrompt } from './launch-prompt-file'
 import { stageStartupCommand } from './startup-command-staging'
 import { buildStartupCommandSubmission } from './startup-command-submission'
 import { quoteStartupArg } from './tui-agent-startup-shell'
@@ -79,10 +81,14 @@ const PROMPTS: [string, string][] = [
   ['a prompt with a tab', 'before\tafter']
 ]
 
-async function launchInRealShell(shell: LiveShell, prompt: string): Promise<string | null> {
+async function launchInRealShell(
+  shell: LiveShell,
+  prompt: string,
+  prepare: (command: string) => string = (command) => command
+): Promise<string | null> {
   const caseDir = mkdtempSync(join(SANDBOX, `${shell.name}-`))
   const capture = join(caseDir, 'argv')
-  const command = `${quoteStartupArg(AGENT, 'posix')} ${quoteStartupArg(prompt, 'posix')}`
+  const command = prepare(`${quoteStartupArg(AGENT, 'posix')} ${quoteStartupArg(prompt, 'posix')}`)
   const staging = stageStartupCommand({
     command,
     shellPath: shell.path,
@@ -154,5 +160,25 @@ describeShells('a staged launch line in a real shell', () => {
       },
       20_000
     )
+  }
+})
+
+describeShells('a launch file named on a real command line', () => {
+  for (const shell of SHELLS) {
+    it(`hands ${shell.name}'s agent a pointer to the full prompt`, async () => {
+      const prompt = `${HOSTILE}\n${'z'.repeat(20_000)}\n`
+      const planned = planLaunchPrompt(prompt)
+      let written: WrittenLaunchFile | undefined
+      const argv = await launchInRealShell(shell, planned.prompt, (command) => {
+        written = writeLaunchFile({
+          launchFile: planned.launchFile!,
+          command,
+          baseDirectory: SANDBOX
+        })
+        return written.command!
+      })
+      expect(argv).toBe(`${buildLaunchFilePointer(written!.path)}\0`)
+      expect(readFileSync(written!.path, 'utf8')).toBe(prompt)
+    }, 20_000)
   }
 })

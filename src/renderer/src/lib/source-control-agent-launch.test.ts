@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => {
     toastError: vi.fn(),
     toastWarning: vi.fn(),
     showNotDelivered: vi.fn(),
+    showNotStarted: vi.fn(),
     settleTerminalPlacement: vi.fn(),
     refreshSessionTabs: vi.fn(),
     state
@@ -47,10 +48,12 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
 }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError, warning: mocks.toastWarning } }))
 vi.mock('@/lib/agent-launch-prompt-not-delivered-notice', () => ({
-  showAgentLaunchPromptNotDeliveredNotice: mocks.showNotDelivered
+  showAgentLaunchPromptNotDeliveredNotice: mocks.showNotDelivered,
+  showAgentLaunchNotStartedNotice: mocks.showNotStarted
 }))
 
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
+import { describeLaunchFileUnavailable } from '../../../shared/launch-prompt-file'
 import {
   type AgentLaunchTabReservation,
   agentLaunchReservedGroupIds,
@@ -584,5 +587,20 @@ describe('telling the user what a hosted launch did', () => {
       failureNotified: true
     })
     expect(mocks.toastError).toHaveBeenCalledWith(result.message)
+  })
+
+  // Why: a spawn the host refused never ran, so no follow-up may proceed and the prompt is handed back.
+  it('hands the prompt back when the host could not write its launch file', () => {
+    const result = {
+      kind: 'failed' as const,
+      message: describeLaunchFileUnavailable('ENOSPC: no space left on device')
+    }
+    expect(settleSourceControlAgentLaunch(result, { agent: 'claude', prompt: PROMPT })).toEqual({
+      started: false,
+      promptDelivered: false,
+      failureNotified: true
+    })
+    expect(mocks.showNotStarted).toHaveBeenCalledWith({ prompt: PROMPT })
+    expect(mocks.toastError).not.toHaveBeenCalled()
   })
 })

@@ -9,7 +9,7 @@ import { isTuiAgent } from '../../shared/tui-agent-config'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../shared/tui-agent-selection'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
-import { planStartupWithPromptCandidate } from '../../shared/startup-line-prompt-carry'
+import { planStartupWithLaunchPrompt } from '../../shared/startup-line-prompt-carry'
 import {
   detectInstalledAgentsWithShellPathHydration,
   detectRemoteAgents
@@ -128,9 +128,6 @@ export function buildWorktreeStartupForAgent(
     toSessionOptions: (
       preferences?: AgentLaunchPreferences
     ) => Parameters<typeof buildAgentStartupPlan>[0]['sessionOptions'] | undefined
-    /** Set by a caller that delivers an uncarried prompt itself: the prompt then rides only a typed
-     *  line that can carry it, and this reports whether it did. Absent keeps the CLI's fold. */
-    onPromptCarry?: (carried: boolean) => void
   }
 ): {
   agent: TuiAgent
@@ -149,17 +146,10 @@ export function buildWorktreeStartupForAgent(
     ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {}),
     sessionOptions: environment.toSessionOptions(environment.launchPreferences)
   })
-  const prompt = environment.prompt ?? ''
-  let startupPlan: ReturnType<typeof buildAgentStartupPlan>
-  if (environment.onPromptCarry) {
-    const offered = planStartupWithPromptCandidate(planInputs, prompt)
-    startupPlan = offered.plan
-    if (startupPlan && prompt.trim()) {
-      environment.onPromptCarry(offered.promptCarried)
-    }
-  } else {
-    startupPlan = buildAgentStartupPlan({ ...planInputs, prompt, allowEmptyPromptLaunch: true })
-  }
+  const { plan: startupPlan, launchFile } = planStartupWithLaunchPrompt(
+    planInputs,
+    environment.prompt ?? ''
+  )
   if (!startupPlan) {
     throw new Error(`Could not build launch command for ${agent}.`)
   }
@@ -172,6 +162,7 @@ export function buildWorktreeStartupForAgent(
         ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
         : {}),
       ...(startupPlan.env ? { env: startupPlan.env } : {}),
+      ...(launchFile ? { launchFile } : {}),
       telemetry: agentStartedTelemetry(agent, environment.launchSource)
     },
     ...(startupPlan.followupPrompt

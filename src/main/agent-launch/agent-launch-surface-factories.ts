@@ -25,8 +25,7 @@ export type AgentLaunchSurfaceFactory = {
     worktreeId: string
     agent: TuiAgent
     options?: Readonly<Record<string, unknown>>
-    /** Offered only for an agent whose CLI takes the prompt on argv. It rides the launch command
-     *  only when the typed line can carry it; `promptRodeLaunchCommand` reports which happened. */
+    /** Only for an agent whose CLI takes the prompt on argv; it rides the launch command. */
     startupPrompt?: string
     /** Replaces the settings default for this launch only; `null` means no arguments at all. */
     agentArgs?: string | null
@@ -42,8 +41,6 @@ export type AgentLaunchSurfaceFactory = {
     /** The pane this create minted; a factory whose runtime reports none omits it, never invents. */
     paneKey?: string
     warning?: string
-    /** Reported by the surface that built the typed line, never predicted by the executor. */
-    promptRodeLaunchCommand?: boolean
   }>
   /**
    * Commits the launch text as the session's first turn, answering with the transcript row's id.
@@ -123,7 +120,5 @@ export type AgentLaunchWorkspaceFactory = {
     startupTerminalPaneKey?: string
     /** Created, but incomplete — surfaced on the launch result rather than dropped. */
     warning?: string
-    /** Reported by the create that built the startup command's typed line. */
-    promptRodeLaunchCommand?: boolean
   }>
 }

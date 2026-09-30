@@ -69,6 +69,9 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
       : session.connectionId && session.paneStartup?.command
         ? 'shell-ready'
         : session.paneStartup?.startupCommandDelivery,
+    ...(!session.shouldDeliverStartupViaTerminalPaste && session.paneStartup?.launchFile
+      ? { launchFile: session.paneStartup.launchFile }
+      : {}),
     connectionId: session.connectionId,
     executionHostId: session.executionHostId,
     worktreeId: session.deps.worktreeId,

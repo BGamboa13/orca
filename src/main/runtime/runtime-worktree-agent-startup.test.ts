@@ -109,29 +109,35 @@ describe('buildWorktreeStartupForAgent host resolution', () => {
 })
 
 describe('buildWorktreeStartupForAgent prompt carry', () => {
-  const build = (onPromptCarry?: (carried: boolean) => void) =>
+  const build = (prompt: string, platform: NodeJS.Platform = 'linux') =>
     buildWorktreeStartupForAgent({
       repo: makeRepo({}),
       settings,
       agent: 'claude',
-      prompt: 'summarize the diff\nthen list the risks',
-      getLaunchPlatform: () => 'linux',
-      toSessionOptions: () => undefined,
-      ...(onPromptCarry ? { onPromptCarry } : {})
+      prompt,
+      getLaunchPlatform: () => platform,
+      toSessionOptions: () => undefined
     })
 
-  it('starts clean and reports it when a caller that pastes offers a prompt the line cannot carry', () => {
-    const onPromptCarry = vi.fn()
-    const result = build(onPromptCarry)
-
-    expect(result.startup.command).not.toContain('summarize')
+  it('carries a multi-line prompt on the startup command, which the host stages', () => {
+    const result = build('summarize the diff\nthen list the risks')
+    expect(result.startup.command).toContain('summarize the diff\nthen list the risks')
+    expect(result.startup.launchFile).toBeUndefined()
     expect(result.followup).toBeUndefined()
-    expect(onPromptCarry).toHaveBeenCalledWith(false)
   })
 
-  it('keeps folding the prompt for a caller that delivers nothing afterwards', () => {
-    // `orca worktree create --prompt` has no post-start paste of its own for an argv agent.
-    expect(build().startup.command).toContain('summarize the diff')
+  it('hands a prompt past the argv ceiling to the host as a launch file', () => {
+    const prompt = 'x'.repeat(20_000)
+    const result = build(prompt)
+    expect(result.startup.launchFile?.content).toBe(prompt)
+    expect(result.startup.command).toContain(result.startup.launchFile?.placeholder)
+    expect(result.startup.command).not.toContain('xxxx')
+  })
+
+  it('points a multi-line prompt at a launch file on a Windows host, which cannot stage', () => {
+    const result = build('summarize the diff\nthen list the risks', 'win32')
+    expect(result.startup.launchFile?.content).toBe('summarize the diff\nthen list the risks')
+    expect(result.startup.command).not.toContain('summarize')
   })
 })
 
