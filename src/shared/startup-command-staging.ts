@@ -71,8 +71,10 @@ export function shouldStageStartupCommand(args: {
   if (args.platform === 'win32') {
     return false
   }
-  if (stagingShellName(args.shellPath) === null && args.orcaBuiltLine !== true) {
-    return false
+  if (stagingShellName(args.shellPath) === null) {
+    // Why every length: Orca's POSIX quoting is literal only in the shells above (tcsh doubles a
+    // quoted backslash and expands `!!`), so another shell only ever sees the script's inert path.
+    return args.orcaBuiltLine === true
   }
   const body = stripSubmitTerminator(args.command)
   return (

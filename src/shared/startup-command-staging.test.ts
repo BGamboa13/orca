@@ -100,6 +100,30 @@ describe('stageStartupCommand', () => {
     }
   )
 
+  // Measured: tcsh typed `'fix C:'"\\"'dir'` as `fix C:\\dir` and expanded `!!` in `'wow!! great'`.
+  it.each([['/bin/tcsh'], ['/usr/bin/nu'], [undefined]])(
+    'stages even a short Orca-built line for a shell that cannot source it (%s)',
+    (shellPath) => {
+      const command = `claude 'wow!! great'`
+      const staged = stageStartupCommand({
+        command,
+        shellPath,
+        orcaBuiltLine: true,
+        platform: 'darwin',
+        directory
+      })
+      expect(staged.command).toBe(`/bin/sh '${staged.scriptPath}'`)
+      expect(readFileSync(staged.scriptPath!, 'utf8')).toContain(`\n${command}\n`)
+    }
+  )
+
+  it('types a short Orca-built line in a shell that reads its quoting literally', () => {
+    const command = `claude 'wow!! great'`
+    expect(
+      stageStartupCommand({ command, shellPath: '/bin/zsh', orcaBuiltLine: true, directory })
+    ).toEqual({ command, delivery: 'typed' })
+  })
+
   // Why: a quick command or --command written for tcsh or nu is not sh syntax.
   it.each([['/bin/tcsh'], ['/usr/bin/nu'], [undefined]])(
     'types a command the user wrote as it always was in a shell that cannot source it (%s)',
