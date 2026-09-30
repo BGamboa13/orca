@@ -896,7 +896,12 @@
         "tooLarge": "テキストが大きすぎてコピーできません。"
       },
       "pendingWorktreeCreation": {
-        "checkingOutFiles": "ファイルをチェックアウト中… {{percent}}%"
+        "checkingOutFiles": "ファイルをチェックアウト中… {{percent}}%",
+        "provisioningVm": "VMをプロビジョニング中…",
+        "settingUpWorkspace": "ワークスペースをセットアップ中…",
+        "preparingWorkspace": "ワークスペースを準備中…",
+        "creatingWorktree": "ワークツリーを作成中…",
+        "fetchingBaseBranch": "ベースブランチを取得中…"
       }
     },
     "hooks": {

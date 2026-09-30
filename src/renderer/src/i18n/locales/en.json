@@ -1016,7 +1016,12 @@
         "tooLarge": "The text is too large to copy."
       },
       "pendingWorktreeCreation": {
-        "checkingOutFiles": "Checking out files… {{percent}}%"
+        "checkingOutFiles": "Checking out files… {{percent}}%",
+        "provisioningVm": "Provisioning VM…",
+        "settingUpWorkspace": "Setting up your workspace…",
+        "preparingWorkspace": "Preparing workspace…",
+        "creatingWorktree": "Creating worktree…",
+        "fetchingBaseBranch": "Fetching base branch…"
       }
     },
     "hooks": {

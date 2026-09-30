@@ -197,13 +197,18 @@ export function getCreationProgressLabel(
     )
   }
   if (entry.phase === 'provisioning-vm') {
-    return 'Provisioning VM…'
+    return translate('auto.lib.pendingWorktreeCreation.provisioningVm', 'Provisioning VM…')
   }
   if (entry.indeterminate) {
-    return 'Setting up your workspace…'
+    return translate(
+      'auto.lib.pendingWorktreeCreation.settingUpWorkspace',
+      'Setting up your workspace…'
+    )
   }
   if (entry.phase === 'preparing') {
-    return 'Preparing workspace…'
+    return translate('auto.lib.pendingWorktreeCreation.preparingWorkspace', 'Preparing workspace…')
   }
-  return entry.phase === 'creating' ? 'Creating worktree…' : 'Fetching base branch…'
+  return entry.phase === 'creating'
+    ? translate('auto.lib.pendingWorktreeCreation.creatingWorktree', 'Creating worktree…')
+    : translate('auto.lib.pendingWorktreeCreation.fetchingBaseBranch', 'Fetching base branch…')
 }

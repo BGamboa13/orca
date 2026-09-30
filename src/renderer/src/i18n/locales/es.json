@@ -735,7 +735,12 @@
         }
       },
       "pendingWorktreeCreation": {
-        "checkingOutFiles": "Extrayendo archivos… {{percent}}%"
+        "checkingOutFiles": "Extrayendo archivos… {{percent}}%",
+        "provisioningVm": "Provisionando VM…",
+        "settingUpWorkspace": "Configurando tu espacio de trabajo…",
+        "preparingWorkspace": "Preparando el espacio de trabajo…",
+        "creatingWorktree": "Creando el worktree…",
+        "fetchingBaseBranch": "Obteniendo la rama base…"
       }
     },
     "hooks": {

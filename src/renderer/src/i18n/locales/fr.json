@@ -995,7 +995,12 @@
         "tooLarge": "Le texte est trop volumineux pour être copié."
       },
       "pendingWorktreeCreation": {
-        "checkingOutFiles": "Extraction des fichiers… {{percent}}%"
+        "checkingOutFiles": "Extraction des fichiers… {{percent}}%",
+        "provisioningVm": "Provisionnement de la VM…",
+        "settingUpWorkspace": "Configuration de votre espace de travail…",
+        "preparingWorkspace": "Préparation de l'espace de travail…",
+        "creatingWorktree": "Création du worktree…",
+        "fetchingBaseBranch": "Récupération de la branche de base…"
       }
     },
     "hooks": {

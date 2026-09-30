@@ -896,7 +896,12 @@
         "tooLarge": "텍스트가 너무 커서 복사할 수 없습니다."
       },
       "pendingWorktreeCreation": {
-        "checkingOutFiles": "파일 체크아웃 중… {{percent}}%"
+        "checkingOutFiles": "파일 체크아웃 중… {{percent}}%",
+        "provisioningVm": "VM 프로비저닝 중…",
+        "settingUpWorkspace": "워크스페이스 설정 중…",
+        "preparingWorkspace": "워크스페이스 준비 중…",
+        "creatingWorktree": "작업 트리 만드는 중…",
+        "fetchingBaseBranch": "기본 브랜치 가져오는 중…"
       }
     },
     "hooks": {
