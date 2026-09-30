@@ -4,6 +4,11 @@ import { hashDispatchCapability } from '../dispatch-capability-hash'
 import type { OrchestrationDb } from '../orchestration-db'
 import { dispatchAssigneeOrcaSessionId } from '../../dispatch-assignee-orca-session-id'
 
+/** Authorizes nothing until `prepareStartingWorkerAuthority` binds its hash to a live terminal. */
+export function mintDispatchCapability(): string {
+  return `dcap_${randomBytes(32).toString('base64url')}`
+}
+
 export function prepareStartingWorkerAuthority(
   this: OrchestrationDb,
   params: {
@@ -20,6 +25,8 @@ export function prepareStartingWorkerAuthority(
     // creation included; its pre-rename effects rows said 'reused_agent_terminal'). 'external':
     // an explicit --terminal reuse; ownership transfers only from an exact owned settled resource.
     terminalOwnership?: 'created' | 'external'
+    /** Minted before the spawn when the worker's brief rides its launch command. */
+    capability?: string
   }
 ): string {
   this.db.exec('BEGIN IMMEDIATE')
@@ -49,7 +56,7 @@ export function prepareStartingWorkerAuthority(
         `Terminal ${params.handle} already has an active dispatch (${existing.id} for task ${existing.task_id})`
       )
     }
-    const capability = `dcap_${randomBytes(32).toString('base64url')}`
+    const capability = params.capability ?? mintDispatchCapability()
     const endpointId = this.getWorkerDispatch(params.dispatchId)?.runtime_epoch ?? null
     const contextUpdate = this.db
       .prepare(

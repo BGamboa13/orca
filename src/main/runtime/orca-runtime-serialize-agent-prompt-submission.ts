@@ -185,6 +185,7 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
     status: NonNullable<RuntimeTerminalAgentStatus['status']>
     updatedAt: number
     stateStartedAt: number
+    explicitPromptStartedAt: number | null
   } | null {
     return selectFreshExplicitAgentStatus({
       handle,
@@ -230,6 +231,8 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
       permissionSequence: this.agentPromptPermissionSequenceByPtyId.get(ptyId) ?? 0,
       workingSequence: lifecycle?.workingSequence ?? 0,
       explicitWorkingStartedAt: explicit?.status === 'working' ? explicit.stateStartedAt : null,
+      explicitPromptStartedAt:
+        explicit?.status === 'working' ? explicit.explicitPromptStartedAt : null,
       outputSequence,
       status
     }
