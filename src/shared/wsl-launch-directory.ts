@@ -9,6 +9,8 @@ export type WslLaunchDirectory = {
   windowsPath: string
   /** The same directory as the distro's shell and agent read it. */
   linuxPath: string
+  /** The login shell the pane runs; the host sees only wsl.exe, and this decides how to source. */
+  shell?: string
 }
 
 export function parseWslLaunchDirectory(value: unknown): WslLaunchDirectory | undefined {
@@ -22,11 +24,12 @@ export function parseWslLaunchDirectory(value: unknown): WslLaunchDirectory | un
     return undefined
   }
   const { distro, windowsPath, linuxPath } = value
+  const shell = 'shell' in value && typeof value.shell === 'string' ? value.shell : undefined
   return typeof distro === 'string' &&
     typeof windowsPath === 'string' &&
     windowsPath.startsWith('\\\\') &&
     typeof linuxPath === 'string' &&
     linuxPath.startsWith('/')
-    ? { distro, windowsPath, linuxPath }
+    ? { distro, windowsPath, linuxPath, ...(shell?.startsWith('/') ? { shell } : {}) }
     : undefined
 }

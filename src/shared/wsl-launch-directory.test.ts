@@ -83,11 +83,39 @@ describe('a WSL staged line', () => {
     })
     const [script] = readdirSync(windowsSide)
     expect(staging).toMatchObject({ delivery: 'staged', scriptPath: join(windowsSide, script!) })
-    // The host cannot see the distro's shell, so `/bin/sh` runs it whatever that shell is.
+    // With no login shell from the probe, `/bin/sh` runs it whatever that shell is.
     expect(staging.command).toBe(`/bin/sh '/home/ada/.cache/orca/${script}'`)
     expect(readFileSync(join(windowsSide, script!), 'utf8')).toBe(
       `command rm -f -- '/home/ada/.cache/orca/${script}'\n${command}\n`
     )
+  })
+
+  // Why: /bin/sh would skip the pane's own functions, such as Orca's codex wrapper.
+  it.each([
+    ['/bin/bash', '.'],
+    ['/usr/bin/zsh', '.'],
+    ['/usr/bin/fish', 'source']
+  ])('sources the script in the distro login shell %s', (shell, keyword) => {
+    const staging = stageStartupCommand({
+      command: `codex '${'x'.repeat(600)}'`,
+      shellPath: 'C:\\Windows\\System32\\wsl.exe',
+      orcaBuiltLine: true,
+      platform: 'win32',
+      wslDirectory: { ...directory, shell }
+    })
+    const [script] = readdirSync(windowsSide)
+    expect(staging.command).toBe(`${keyword} '/home/ada/.cache/orca/${script}'`)
+  })
+
+  it("types a short line as is once the distro's shell is one Orca's quoting is literal in", () => {
+    const staging = stageStartupCommand({
+      command: `claude 'fix it'`,
+      shellPath: 'C:\\Windows\\System32\\wsl.exe',
+      orcaBuiltLine: true,
+      platform: 'win32',
+      wslDirectory: { ...directory, shell: '/bin/bash' }
+    })
+    expect(staging).toEqual({ command: `claude 'fix it'`, delivery: 'typed' })
   })
 })
 
@@ -103,5 +131,19 @@ describe('parseWslLaunchDirectory', () => {
     expect(parseWslLaunchDirectory({ ...valid, linuxPath: 'home/ada' })).toBeUndefined()
     expect(parseWslLaunchDirectory({ distro: 'Ubuntu' })).toBeUndefined()
     expect(parseWslLaunchDirectory(null)).toBeUndefined()
+  })
+
+  it("keeps the distro's login shell only when it is an absolute path", () => {
+    const valid = {
+      distro: 'Ubuntu',
+      windowsPath: '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.cache\\orca',
+      linuxPath: '/home/ada/.cache/orca'
+    }
+    expect(parseWslLaunchDirectory({ ...valid, shell: '/bin/bash' })).toEqual({
+      ...valid,
+      shell: '/bin/bash'
+    })
+    expect(parseWslLaunchDirectory({ ...valid, shell: 'bash' })).toEqual(valid)
+    expect(parseWslLaunchDirectory({ ...valid, shell: 7 })).toEqual(valid)
   })
 })

@@ -37,6 +37,10 @@ export async function spawnLocalPty(
   getOptions: () => LocalPtyProviderOptions
 ): Promise<PtySpawnResult> {
   const reattachId = normalizeLocalCallerSessionId(args.sessionId, args.attachOnly === true)
+  const wslDistro =
+    args.command && !args.attachOnly ? resolveLocalPtyWslDistro(args, getOptions) : undefined
+  // Why before the shutdown check: no await may sit between it and this spawn's registration.
+  const wslLaunchDirectory = wslDistro ? await resolveWslLaunchDirectory(wslDistro) : undefined
   if (reattachId) {
     const pendingShutdown = ptyShutdownOperations.get(reattachId)
     if (pendingShutdown) {
@@ -50,9 +54,6 @@ export async function spawnLocalPty(
   if (args.attachOnly) {
     throw new SessionNotFoundError(args.sessionId ?? '')
   }
-  const wslDistro = args.command ? resolveLocalPtyWslDistro(args, getOptions) : undefined
-  // Why conditional: an await here would let a same-id shutdown miss this spawn.
-  const wslLaunchDirectory = wslDistro ? await resolveWslLaunchDirectory(wslDistro) : undefined
   const launchFile = writeSpawnLaunchFile({
     launchFile: args.launchFile,
     command: args.command,
