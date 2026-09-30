@@ -9,57 +9,59 @@ function record(completed: number, total: number, done = false): string {
 
 function harness(): {
   reports: (WorktreeCheckoutProgress | null)[]
-  clock: { now: number }
   reader: ReturnType<typeof createWorktreeCheckoutProgressReader>
 } {
   const reports: (WorktreeCheckoutProgress | null)[] = []
-  const clock = { now: 0 }
-  const reader = createWorktreeCheckoutProgressReader(
-    (progress) => reports.push(progress),
-    () => clock.now
-  )
-  return { reports, clock, reader }
+  const reader = createWorktreeCheckoutProgressReader((progress) => reports.push(progress))
+  return { reports, reader }
 }
 
 describe('createWorktreeCheckoutProgressReader', () => {
-  it('reports at most once per 100 ms, and always reports 100% and the end of the checkout', () => {
-    const { reports, clock, reader } = harness()
+  it('reports every percent git prints, then the end of the checkout', () => {
+    const { reports, reader } = harness()
     reader.read(record(1, 100))
-    clock.now = 50
-    reader.read(record(2, 100))
-    clock.now = 99
-    reader.read(record(3, 100))
-    clock.now = 100
-    reader.read(record(4, 100))
-    clock.now = 110
+    reader.read(record(2, 100) + record(3, 100))
     reader.read(record(100, 100))
     reader.read(record(100, 100, true))
 
     expect(reports).toEqual([
       { percent: 1, completed: 1, total: 100 },
-      { percent: 4, completed: 4, total: 100 },
+      { percent: 2, completed: 2, total: 100 },
+      { percent: 3, completed: 3, total: 100 },
       { percent: 100, completed: 100, total: 100 },
       null
     ])
   })
 
+  it('delivers the record git prints after a stall, so the bar never lags git', () => {
+    const { reports, reader } = harness()
+    reader.read(record(40, 100))
+    // Git reprints the same percent about once per second while stalled.
+    reader.read(record(40, 100))
+    reader.read(record(40, 100))
+    reader.read(record(60, 100))
+
+    expect(reports).toEqual([
+      { percent: 40, completed: 40, total: 100 },
+      { percent: 60, completed: 60, total: 100 }
+    ])
+  })
+
   it('never moves backwards, so a hook re-running a checkout from 0% is ignored', () => {
-    const { reports, clock, reader } = harness()
+    const { reports, reader } = harness()
     reader.read(record(40, 100))
-    clock.now = 1_000
     reader.read(record(0, 100))
+    reader.read(record(39, 100))
     reader.read(record(40, 100))
-    clock.now = 2_000
     reader.read(record(41, 100))
 
     expect(reports.map((progress) => progress?.percent)).toEqual([40, 41])
   })
 
-  it('reports nothing after the checkout is done', () => {
-    const { reports, clock, reader } = harness()
+  it('reports the end of the checkout once and nothing after it', () => {
+    const { reports, reader } = harness()
     reader.read(record(10, 10))
     reader.read(record(10, 10, true))
-    clock.now = 1_000
     // A post-checkout hook running its own checkout writes to the same pipe.
     reader.read(record(5, 10))
     reader.read(record(10, 10))
@@ -69,10 +71,9 @@ describe('createWorktreeCheckoutProgressReader', () => {
   })
 
   it('reports nothing once closed, which the create does when git exits or fails', () => {
-    const { reports, clock, reader } = harness()
+    const { reports, reader } = harness()
     reader.read(record(3, 10))
     reader.close()
-    clock.now = 1_000
     reader.read(record(9, 10))
     reader.read(record(10, 10, true))
 
