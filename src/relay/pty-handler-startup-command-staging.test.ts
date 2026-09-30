@@ -87,10 +87,7 @@ describePosix('relay startup command staging', () => {
   it('deletes a script the shell never sourced when the PTY exits', async () => {
     await spawn(`claude '${'x'.repeat(600)}'`)
     const scriptPath = join(stagingDir, readdirSync(stagingDir)[0])
-    const onExit = mockPtyInstance.onExit.mock.calls.at(-1)?.[0] as (e: {
-      exitCode: number
-    }) => void
-    onExit({ exitCode: 0 })
+    mockPtyInstance.onExit.mock.calls.at(-1)?.[0]?.({ exitCode: 0 })
     expect(existsSync(scriptPath)).toBe(false)
   })
 
