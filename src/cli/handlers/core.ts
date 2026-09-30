@@ -4,6 +4,8 @@ import { formatCliStatus, formatStatus, printResult } from '../format'
 import { RuntimeClientError, serveOrcaApp } from '../runtime-client'
 import { stripElectronRunAsNode } from '../runtime/launch'
 import { getServeOptionValidationError } from '../../shared/serve-option-validation'
+import { readCliClientVersionInfo } from '../cli-version-report'
+import { isStandaloneCli } from '../standalone-cli-mode'
 
 function envRecord(): Record<string, string> {
   // Why: the `orca` launcher runs Orca's Electron binary as Node, so this CLI
@@ -125,7 +127,11 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     process.exitCode = exitCode
   },
   status: async ({ client, json }) => {
-    const result = await client.getCliStatus()
+    const status = await client.getCliStatus()
+    // Why: a standalone install updates apart from its server, so status names both builds.
+    const result = isStandaloneCli()
+      ? { ...status, result: { client: readCliClientVersionInfo(), ...status.result } }
+      : status
     if (!json && !result.result.runtime.reachable) {
       process.exitCode = 1
     }
