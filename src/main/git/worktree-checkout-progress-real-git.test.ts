@@ -5,6 +5,29 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeCheckoutProgress } from '../../shared/worktree/create-types'
 import { gitExecFileAsync } from './runner'
 import { addWorktree } from './worktree'
+import type * as WorktreeCheckoutProgressModule from './worktree-checkout-progress'
+
+const observedStderrChunks = vi.hoisted((): string[] => [])
+
+// Records every stderr chunk the create's observer receives, then delegates unchanged.
+vi.mock('./worktree-checkout-progress', async (importOriginal) => {
+  const actual = await importOriginal<typeof WorktreeCheckoutProgressModule>()
+  return {
+    ...actual,
+    createWorktreeCheckoutProgressReader: (
+      ...args: Parameters<typeof actual.createWorktreeCheckoutProgressReader>
+    ) => {
+      const reader = actual.createWorktreeCheckoutProgressReader(...args)
+      return {
+        ...reader,
+        read: (chunk: string) => {
+          observedStderrChunks.push(chunk)
+          reader.read(chunk)
+        }
+      }
+    }
+  }
+})
 
 const FILE_COUNT = 150
 
@@ -12,6 +35,7 @@ let root = ''
 let repo = ''
 
 beforeEach(async () => {
+  observedStderrChunks.length = 0
   root = await mkdtemp(join(tmpdir(), 'orca-checkout-progress-'))
   repo = join(root, 'repo')
   await gitExecFileAsync(['init', '--quiet', repo], { cwd: root })
@@ -45,6 +69,14 @@ async function captureFailure(
     }
   }
   throw new Error('expected the create to fail with an Error')
+}
+
+// Why: git's one-second tick can add a same-percent record to one run only, so compare without records.
+function withoutProgressRecords(text: unknown): string {
+  return String(text)
+    .split(/[\r\n]/)
+    .filter((line) => !line.startsWith('Updating files:'))
+    .join('\n')
 }
 
 describe('checkout progress from a real `git worktree add`', () => {
@@ -101,7 +133,7 @@ describe('checkout progress from a real `git worktree add`', () => {
     expect(onCheckoutProgress).not.toHaveBeenCalled()
   })
 
-  it('fails with the same error and stderr when git printed progress before failing', async () => {
+  it('leaves the error and stderr unchanged when git printed progress before failing', async () => {
     vi.stubEnv('GIT_PROGRESS_DELAY', '0')
     // The last file in checkout order goes through a required smudge filter that fails.
     await writeFile(join(repo, '.gitattributes'), 'zzz-last.txt filter=failing\n')
@@ -130,8 +162,12 @@ describe('checkout progress from a real `git worktree add`', () => {
       })
     )
 
-    expect(observed.message).toBe(unobserved.message)
-    expect(observed.stderr).toBe(unobserved.stderr)
+    // The observer saw exactly the stderr the error carries, byte for byte.
+    expect(observed.stderr).toBe(observedStderrChunks.join(''))
+    expect(withoutProgressRecords(observed.message)).toBe(
+      withoutProgressRecords(unobserved.message)
+    )
+    expect(withoutProgressRecords(observed.stderr)).toBe(withoutProgressRecords(unobserved.stderr))
     expect(observed.message).toContain('smudge filter failing failed')
     expect(observed.stderr).toContain('Updating files:')
     expect(reports.some((progress) => progress !== null)).toBe(true)
