@@ -101,6 +101,42 @@ describe('checkout progress from a real `git worktree add`', () => {
     expect(onCheckoutProgress).not.toHaveBeenCalled()
   })
 
+  it('fails with the same error and stderr when git printed progress before failing', async () => {
+    vi.stubEnv('GIT_PROGRESS_DELAY', '0')
+    // The last file in checkout order goes through a required smudge filter that fails.
+    await writeFile(join(repo, '.gitattributes'), 'zzz-last.txt filter=failing\n')
+    await writeFile(join(repo, 'zzz-last.txt'), 'last\n')
+    await gitExecFileAsync(['add', '.'], { cwd: repo })
+    await gitExecFileAsync(
+      ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'filter'],
+      { cwd: repo }
+    )
+    // Why: reads its input first so git never races a closed pipe into different stderr.
+    await gitExecFileAsync(['config', 'filter.failing.smudge', 'cat >/dev/null; false'], {
+      cwd: repo
+    })
+    await gitExecFileAsync(['config', 'filter.failing.required', 'true'], { cwd: repo })
+    const target = join(root, 'filtered')
+    const reports: (WorktreeCheckoutProgress | null)[] = []
+
+    const unobserved = await captureFailure(() =>
+      addWorktree(repo, target, 'filtered', 'main', false, false)
+    )
+    // Git removes the half-made worktree but keeps the branch it created.
+    await gitExecFileAsync(['branch', '-D', 'filtered'], { cwd: repo })
+    const observed = await captureFailure(() =>
+      addWorktree(repo, target, 'filtered', 'main', false, false, {
+        onCheckoutProgress: (progress) => reports.push(progress)
+      })
+    )
+
+    expect(observed.message).toBe(unobserved.message)
+    expect(observed.stderr).toBe(unobserved.stderr)
+    expect(observed.message).toContain('smudge filter failing failed')
+    expect(observed.stderr).toContain('Updating files:')
+    expect(reports.some((progress) => progress !== null)).toBe(true)
+  })
+
   it('still creates the worktree when the progress listener throws', async () => {
     vi.stubEnv('GIT_PROGRESS_DELAY', '0')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
