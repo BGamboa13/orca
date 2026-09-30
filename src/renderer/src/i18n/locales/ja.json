@@ -894,6 +894,9 @@
       },
       "clipboardWriteFailure": {
         "tooLarge": "テキストが大きすぎてコピーできません。"
+      },
+      "pendingWorktreeCreation": {
+        "checkingOutFiles": "ファイルをチェックアウト中… {{percent}}%"
       }
     },
     "hooks": {

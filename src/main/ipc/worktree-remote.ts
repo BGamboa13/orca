@@ -19,7 +19,9 @@ import type {
 } from '../../shared/worktree/base-ref-drift-types'
 import type {
   CreateWorktreeArgs,
+  CreateWorktreeProgressEvent,
   CreateWorktreeResult,
+  WorktreeCheckoutProgress,
   WorktreeCreateBaseFallback
 } from '../../shared/worktree/create-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
@@ -1840,13 +1842,20 @@ export function notifyWorktreeHeadIdentitiesChanged(
 }
 
 // Why: two-phase spinner — fire 'fetching' before pre-create fetch and 'creating' before git worktree add so the renderer can swap its label.
+// `checkout` carries git's checkout meter during 'creating'; null means the checkout finished.
 export function emitCreateWorktreeProgress(
   mainWindow: BrowserWindow,
   phase: 'fetching' | 'creating',
-  creationId?: string
+  creationId?: string,
+  checkout?: WorktreeCheckoutProgress | null
 ): void {
   if (!mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('createWorktree:progress', { creationId, phase })
+    const event: CreateWorktreeProgressEvent = {
+      creationId,
+      phase,
+      ...(checkout !== undefined ? { checkout } : {})
+    }
+    mainWindow.webContents.send('createWorktree:progress', event)
   }
 }
 
@@ -2345,9 +2354,16 @@ async function performLocalWorktreeCreate(
   const localWorktreeGitOptionArgs: [] | [{ wslDistro?: string }] = hasLocalWorktreeGitOptions
     ? [localWorktreeGitOptions]
     : []
+  const creationId = args.creationId
   const addProjectGitOptions = (options?: AddWorktreeOptions): AddWorktreeOptions => ({
     ...options,
-    ...localWorktreeGitOptions
+    ...localWorktreeGitOptions,
+    ...(creationId
+      ? {
+          onCheckoutProgress: (checkout: WorktreeCheckoutProgress | null) =>
+            emitCreateWorktreeProgress(mainWindow, 'creating', creationId, checkout)
+        }
+      : {})
   })
 
   const requestedName = args.name

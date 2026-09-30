@@ -20,6 +20,7 @@ import type {
 } from './worktree-operation-options'
 import { gitExecOptions, resolveWorktreeAddTimeoutMs } from './worktree-operation-options'
 import { bumpWorktreeScanGeneration } from './worktree-scan-cache'
+import { createWorktreeCheckoutProgressReader } from './worktree-checkout-progress'
 
 export type WorktreeAddBaseContext = AddWorktreeResult & {
   effectiveBase: string
@@ -211,13 +212,20 @@ async function performAddWorktree(
       args.push(effectiveBase)
     }
   }
+  // Why: git already writes its checkout meter into our stderr pipe; read it, don't request it.
+  const checkoutProgress =
+    options.onCheckoutProgress && !noCheckout
+      ? createWorktreeCheckoutProgressReader(options.onCheckoutProgress)
+      : null
   try {
     await gitExecFileAsync(args, {
       ...gitExecOptions(repoPath, options),
       // Why: resolve per call — hoisting this to a module const would freeze the override at import.
-      timeout: resolveWorktreeAddTimeoutMs()
+      timeout: resolveWorktreeAddTimeoutMs(),
+      ...(checkoutProgress ? { onStderr: checkoutProgress.read } : {})
     })
   } finally {
+    checkoutProgress?.close()
     // Git may have written the target's `.git` marker even when it reports a late
     // failure, so drop any pre-create route before the follow-up commands route.
     invalidateWslLinkedWorktreeGitRouting(worktreePath)

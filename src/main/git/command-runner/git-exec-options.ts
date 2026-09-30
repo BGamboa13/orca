@@ -23,4 +23,7 @@ export type GitExecOptions = {
   captureWslLoginShellOutput?: boolean
   /** Scheduler priority for this child; status is the safe default. */
   admissionTier?: GitAdmissionTier
+  /** Sees each stderr chunk as it arrives; capture and errors are unchanged. Not
+   *  supported with `terminationBarrier`. */
+  onStderr?: (chunk: string) => void
 }

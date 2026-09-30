@@ -894,6 +894,9 @@
       },
       "clipboardWriteFailure": {
         "tooLarge": "文字太大，无法复制。"
+      },
+      "pendingWorktreeCreation": {
+        "checkingOutFiles": "正在检出文件… {{percent}}%"
       }
     },
     "hooks": {

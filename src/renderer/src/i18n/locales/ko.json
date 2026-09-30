@@ -894,6 +894,9 @@
       },
       "clipboardWriteFailure": {
         "tooLarge": "텍스트가 너무 커서 복사할 수 없습니다."
+      },
+      "pendingWorktreeCreation": {
+        "checkingOutFiles": "파일 체크아웃 중… {{percent}}%"
       }
     },
     "hooks": {

@@ -993,6 +993,9 @@
       },
       "clipboardWriteFailure": {
         "tooLarge": "Le texte est trop volumineux pour être copié."
+      },
+      "pendingWorktreeCreation": {
+        "checkingOutFiles": "Extraction des fichiers… {{percent}}%"
       }
     },
     "hooks": {
