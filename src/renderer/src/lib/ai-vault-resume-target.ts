@@ -87,6 +87,9 @@ export function resolveAiVaultLocalResumeRuntime(
   if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
     return { kind: 'wsl', distro: projectRuntime.runtime.distro }
   }
+  if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'windows-host') {
+    return { kind: 'windows-host' }
+  }
   return wslPath ? { kind: 'wsl', distro: wslPath.distro } : { kind: 'windows-host' }
 }
 

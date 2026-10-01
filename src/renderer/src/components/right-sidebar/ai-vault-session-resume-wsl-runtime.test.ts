@@ -116,6 +116,26 @@ describe('resume across WSL and the Windows host', () => {
     ).toEqual({ status: 'ready', worktreeId: windowsWorktree.id })
   })
 
+  it('honors a WSL-path project pinned to the Windows host over its path', () => {
+    const hostProject: Project = {
+      id: 'wsl',
+      displayName: 'wsl',
+      badgeColor: '#000000',
+      sourceRepoIds: ['wsl'],
+      localWindowsRuntimePreference: { kind: 'windows-host' },
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const resume = (sessionFilePath: string) =>
+      resolveAiVaultSessionLaunchTarget({
+        sessionFilePath,
+        activeWorktreeId: wslWorktree.id,
+        targetState: targetState([hostProject])
+      }).status
+    expect(resume(WSL_SESSION_FILE)).toBe('unsupported')
+    expect(resume(WINDOWS_SESSION_FILE)).toBe('ready')
+  })
+
   it('reports a direct resume into the wrong runtime as unsupported', () => {
     expect(
       resolveAiVaultSessionLaunchTarget({
