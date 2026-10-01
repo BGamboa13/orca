@@ -29,10 +29,9 @@ export function createWorktreeCheckoutProgressReader(
       onProgress(null)
       return
     }
-    // Why: increases only, so a post-checkout hook's own checkout (or a WSL
-    // fallback rerun) restarting at 0% never moves the bar backwards. Git
-    // prints only on a percent change (plus at most one same-percent reprint
-    // after each one-second tick, dropped here), so reports stay ~100.
+    // Why: git prints only on a percent change plus at most one same-percent
+    // reprint after each one-second tick; increases only drops that reprint,
+    // so reports stay ~100.
     if (record.percent <= lastPercent) {
       return
     }
