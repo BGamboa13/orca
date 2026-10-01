@@ -8,3 +8,9 @@
 /cloud/ @Jinwoo-H
 /.github/workflows/cloud-*.yml @Jinwoo-H
 /.github/actions/cloud-sql-rollout-lease/ @Jinwoo-H
+
+# Agent state rules reach users through rules releases, faster than code: every change needs review.
+/src/main/runtime/agent-state-rules/ @Jinwoo-H
+/config/scripts/agent-state-rules-bundle.mjs @Jinwoo-H
+/config/scripts/release-tag-patterns.mjs @Jinwoo-H
+/.github/workflows/agent-state-rules-*.yml @Jinwoo-H
