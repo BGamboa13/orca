@@ -45,6 +45,8 @@ type RegionReads = {
 type CompiledRule = {
   verdict: AgentStateVerdict
   region: Region
+  priority: number
+  answer: AgentStateRuleAnswer
   skipWithoutClock: boolean
   /** False when its region is unreadable, which skips the rule. */
   matches: (reads: RegionReads) => boolean
@@ -95,6 +97,8 @@ export function compileAgentRules(file: AgentStateRulesFile): CompiledRule[] {
     .map((rule) => ({
       verdict: { ruleId: rule.id, ...rule.answer },
       region: rule.when.region,
+      priority: rule.priority,
+      answer: rule.answer,
       skipWithoutClock: rule.answer.state === 'idle' && rule.answer.withoutClock === 'skip',
       matches: compileCondition(rule.when, file)
     }))
@@ -173,17 +177,21 @@ function memoize<T>(read: (() => T | null) | undefined): RegionReader<T> {
   return () => (value === undefined ? (value = read()) : value)
 }
 
-export function evaluateCompiledRules(
-  rules: readonly CompiledRule[],
-  regions: AgentStateRegions
-): AgentStateVerdict | null {
+function regionReads(regions: AgentStateRegions): RegionReads {
   const screen = memoize(regions.readScreenLines)
-  const reads: RegionReads = {
+  return {
     screen,
     screenText: memoize(() => screen()?.join('\n').toLowerCase() ?? null),
     text: memoize(regions.readText),
     title: memoize(regions.readTitleStatus)
   }
+}
+
+export function evaluateCompiledRules(
+  rules: readonly CompiledRule[],
+  regions: AgentStateRegions
+): AgentStateVerdict | null {
+  const reads = regionReads(regions)
   // Why no answer rather than a refusal: with no readable region the caller's other lanes decide.
   for (const rule of rules) {
     if (rule.skipWithoutClock && regions.hasOutputClock === false) {
@@ -203,4 +211,71 @@ export function evaluateAgentStateRules(
 ): AgentStateVerdict | null {
   const file = compiledFileFor(agent)
   return file ? evaluateCompiledRules(file.rules, regions) : null
+}
+
+export type AgentStateRuleOutcome =
+  | 'matched'
+  | 'not-matched'
+  | 'unreadable'
+  | 'skipped-without-clock'
+
+export type AgentStateRulesExplanation = {
+  /** The rule file read: the pane's agent, or `unknown-pane`. */
+  rulesFile: RulesKey
+  /** The first matching rule in priority order: the one `evaluateAgentStateRules` answers with. */
+  deciding: { ruleId: string; region: Region } | null
+  rules: {
+    ruleId: string
+    region: Region
+    priority: number
+    answer: AgentStateRuleAnswer
+    outcome: AgentStateRuleOutcome
+  }[]
+  regions: { screen: readonly string[] | null; title: AgentStatus | null; textTail: string | null }
+}
+
+const EXPLAIN_TEXT_TAIL_CHARS = 400
+
+/**
+ * Every rule of the pane's file over the same reads the evaluator makes, for `orca terminal
+ * explain-state`. Why every rule rather than the first match: the question is usually why a
+ * higher-priority rule did not fire.
+ */
+export function explainAgentStateRules(
+  agent: TuiAgent | null | undefined,
+  regions: AgentStateRegions
+): AgentStateRulesExplanation {
+  const reads = regionReads(regions)
+  const rules = (compiledFileFor(agent)?.rules ?? []).map((rule) => ({
+    ruleId: rule.verdict.ruleId,
+    region: rule.region,
+    priority: rule.priority,
+    answer: rule.answer,
+    outcome: ruleOutcome(rule, reads, regions)
+  }))
+  const deciding = rules.find((rule) => rule.outcome === 'matched')
+  return {
+    rulesFile: rulesKeyFor(agent),
+    deciding: deciding ? { ruleId: deciding.ruleId, region: deciding.region } : null,
+    rules,
+    regions: {
+      screen: reads.screen(),
+      title: reads.title(),
+      textTail: reads.text()?.slice(-EXPLAIN_TEXT_TAIL_CHARS) ?? null
+    }
+  }
+}
+
+function ruleOutcome(
+  rule: CompiledRule,
+  reads: RegionReads,
+  regions: AgentStateRegions
+): AgentStateRuleOutcome {
+  if (rule.skipWithoutClock && regions.hasOutputClock === false) {
+    return 'skipped-without-clock'
+  }
+  if (reads[rule.region]() === null) {
+    return 'unreadable'
+  }
+  return rule.matches(reads) ? 'matched' : 'not-matched'
 }

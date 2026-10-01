@@ -95,6 +95,14 @@ export const TERMINAL_QUERY_METHODS = [
     }
   }),
   defineMethod({
+    // Read-only: why the host reads this pane as ready, working or blocked, rule by rule.
+    name: 'terminal.explainState',
+    params: TerminalHandle,
+    handler: async (params, { runtime }) => ({
+      explanation: runtime.explainTerminalState(params.terminal)
+    })
+  }),
+  defineMethod({
     name: 'terminal.isRunningAgent',
     params: TerminalHandle,
     handler: async (params, { runtime }) => ({

@@ -2,6 +2,8 @@ import type {
   RuntimeTerminalWait as RuntimeTerminalWaitResult,
   RuntimeTerminalWaitCondition
 } from '../../shared/runtime-types'
+import type { RuntimeTerminalStateExplanation } from '../../shared/terminal-state-explanation'
+import { getAgentStateRulesStatus } from './agent-state-rules/active-agent-state-rules'
 import {
   buildPtyTerminalWaitBlockedResult,
   buildPtyTerminalWaitResult,
@@ -14,6 +16,7 @@ import { showsScreenProbeBanner } from './agent-state-rules/agent-state-text-anc
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import {
   evaluateTuiIdle,
+  explainAgentRuleEvidence,
   leafTuiIdleEvidence,
   ptyTuiIdleEvidence,
   type TuiIdleEvidenceSource,
@@ -69,6 +72,47 @@ export class RuntimeTerminalWait {
 
   private evaluateLeaf(leaf: RuntimeLeafRecord, waitText: string): TuiIdleVerdict {
     return evaluateTuiIdle(leafTuiIdleEvidence(this.deps, leaf, () => waitText))
+  }
+
+  /** The verdict a `tui-idle` wait would rank now, and every agent state rule behind it. */
+  explain(handle: string): RuntimeTerminalStateExplanation {
+    const pty = this.deps.getLivePty(handle)?.pty
+    if (pty) {
+      return this.explainRecord(handle, pty, (waitText) => this.evaluatePty(pty, waitText))
+    }
+    const { leaf } = this.deps.getLiveLeaf(handle)
+    return this.explainRecord(handle, leaf, (waitText) => this.evaluateLeaf(leaf, waitText))
+  }
+
+  private explainRecord(
+    handle: string,
+    record: RuntimePtyWorktreeRecord | RuntimeLeafRecord,
+    evaluate: (waitText: string) => TuiIdleVerdict
+  ): RuntimeTerminalStateExplanation {
+    const waitText = buildTerminalWaitText(
+      record.tailBuffer,
+      record.tailPartialLine,
+      record.preview
+    )
+    const verdict = evaluate(waitText)
+    const rules = explainAgentRuleEvidence(this.deps, record, () => waitText)
+    const status = getAgentStateRulesStatus()
+    return {
+      handle,
+      agent: this.deps.getPaneAgent(record.ptyId),
+      state: verdict.kind,
+      ...(verdict.kind === 'blocked' ? { blockedReason: verdict.reason } : {}),
+      ...(verdict.kind === 'pending' ? { quietForeground: verdict.quietForeground } : {}),
+      rules: {
+        rulesFile: rules.rulesFile,
+        deciding: rules.deciding,
+        evaluated: rules.rules,
+        regions: rules.regions
+      },
+      rulesVersion: status.version,
+      rulesSource: status.source,
+      lastUpdateError: status.lastUpdateError
+    }
   }
 
   async wait(

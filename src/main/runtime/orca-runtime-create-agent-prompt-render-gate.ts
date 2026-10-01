@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithWriteTerminalAgentPrompt } from './orca-runtime-write-terminal-agent-prompt'
+import type { RuntimeTerminalStateExplanation } from '../../shared/terminal-state-explanation'
 import {
   CLAUDE_AGENT_PROMPT_RENDER_MARKER,
   CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS,
@@ -137,5 +138,9 @@ export class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithW
     }
   ): Promise<RuntimeTerminalWait> {
     return this.terminalWait.wait(handle, options)
+  }
+
+  explainTerminalState(handle: string): RuntimeTerminalStateExplanation {
+    return this.terminalWait.explain(handle)
   }
 }

@@ -4,6 +4,7 @@ import { WORKTREE_LISTING_SCOPE_NOTES } from './worktree-listing-scope-notes'
 import { SERVE_COMMAND_SPECS } from './serve'
 import { TERMINAL_SEND_COMMAND_SPEC } from './terminal-send'
 import { TERMINAL_CLOSE_COMMAND_SPEC } from './terminal-close'
+import { TERMINAL_EXPLAIN_STATE_COMMAND_SPEC } from './terminal-explain-state'
 
 export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -205,6 +206,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca terminal show [--terminal <handle>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal']
   },
+  TERMINAL_EXPLAIN_STATE_COMMAND_SPEC,
   {
     path: ['terminal', 'read'],
     summary: 'Read bounded terminal output',

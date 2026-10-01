@@ -43,6 +43,7 @@ import {
   getTerminalHandle
 } from '../selectors'
 import { terminalCloseHandler } from './terminal-close'
+import { terminalExplainStateHandler } from './terminal-explain-state'
 import { terminalSendHandler } from './terminal-send'
 
 // Why: terminal wait legitimately needs to outlive the CLI's default RPC
@@ -78,6 +79,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     })
     printResult(result, json, formatTerminalShow)
   },
+  'terminal explain-state': terminalExplainStateHandler,
   'terminal read': async ({ flags, client, cwd, json }) => {
     const cursorFlag = getOptionalStringFlag(flags, 'cursor')
     const cursor =

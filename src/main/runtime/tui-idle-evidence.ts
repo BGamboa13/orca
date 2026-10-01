@@ -18,9 +18,12 @@ import {
 } from './terminal-wait-detection'
 import {
   evaluateAgentStateRules,
+  explainAgentStateRules,
   hasQuietReadyRules,
   idleTitleRequiresQuiet,
   readsTrustedScreen,
+  type AgentStateRegions,
+  type AgentStateRulesExplanation,
   type AgentStateVerdict
 } from './agent-state-rules/agent-state-rules-engine'
 
@@ -366,18 +369,39 @@ function screenReader(
   return () => (lines === undefined ? (lines = read()) : lines)
 }
 
+function agentRuleRegions(
+  record: TuiIdleEvidenceRecord,
+  readScreenLines: () => readonly string[] | null,
+  waitText: () => string
+): AgentStateRegions {
+  return {
+    readScreenLines,
+    readText: () => waitText().toLowerCase(),
+    readTitleStatus: () => record.lastAgentStatus,
+    hasOutputClock: record.lastOutputAt !== null
+  }
+}
+
 function readAgentRuleVerdict(
   agent: TuiAgent | null,
   record: TuiIdleEvidenceRecord,
   readScreenLines: () => readonly string[] | null,
   waitText: () => string
 ): AgentStateVerdict | null {
-  return evaluateAgentStateRules(agent, {
-    readScreenLines,
-    readText: () => waitText().toLowerCase(),
-    readTitleStatus: () => record.lastAgentStatus,
-    hasOutputClock: record.lastOutputAt !== null
-  })
+  return evaluateAgentStateRules(agent, agentRuleRegions(record, readScreenLines, waitText))
+}
+
+/** Every rule of the pane's file, over the regions its tui-idle rule lane reads. */
+export function explainAgentRuleEvidence(
+  source: TuiIdleEvidenceSource,
+  record: TuiIdleEvidenceRecord & { ptyId: string | null },
+  readWaitText: () => string
+): AgentStateRulesExplanation {
+  const agent = source.getPaneAgent(record.ptyId)
+  return explainAgentStateRules(
+    agent,
+    agentRuleRegions(record, screenReader(source, agent, record.ptyId), lazyWaitText(readWaitText))
+  )
 }
 
 function lazyWaitText(readWaitText: () => string): () => string {

@@ -1134,6 +1134,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.create': TerminalCreateParams,
   'terminal.createAgentSession': CreateAgentSessionParams,
   'terminal.ensureAgentSession': EnsureAgentSessionParams,
+  'terminal.explainState': TerminalHandle,
   'terminal.focus': TerminalFocus,
   'terminal.getAutoRestoreFit': TerminalGetAutoRestoreFitParams,
   'terminal.getDisplayMode': TerminalHandle,
