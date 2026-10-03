@@ -1,10 +1,10 @@
+import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/ai-vault-resume-shell'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   canResumeAiVaultSessionOnTarget,
   getAiVaultResumeWorkspaceExecutionHostId,
-  getAiVaultResumeWorkspaceTargetStatus,
-  resolveAiVaultLocalResumeRuntime
+  getAiVaultResumeWorkspaceTargetStatus
 } from '@/lib/ai-vault-resume-target'
 import {
   isAiVaultSessionResumableContent,
@@ -24,8 +24,7 @@ export type AiVaultSessionResumeTargetState = Pick<
   AppState,
   'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'
 > &
-  // Why: a Windows-path project can still execute in WSL; without these the runtime falls back to the path.
-  Partial<Pick<AppState, 'projects' | 'settings'>>
+  Partial<Pick<AppState, 'activeRepoId' | 'activeWorktreeId' | 'projects' | 'settings'>>
 
 export type AiVaultSessionResumeState = {
   blocked: boolean
@@ -205,7 +204,7 @@ function resolveSupportedResumeWorktreeId(args: {
       sessionExecutionHostId: args.sessionExecutionHostId,
       targetStatus,
       targetExecutionHostId,
-      targetRuntime: resolveAiVaultLocalResumeRuntime(args.targetState, args.worktreeId)
+      targetWslDistro: getAiVaultResumeWorkspaceWslDistro(args.targetState, args.worktreeId)
     })
   ) {
     return null

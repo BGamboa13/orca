@@ -1,8 +1,8 @@
+import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/ai-vault-resume-shell'
 import {
   canResumeAiVaultSessionOnTarget,
   getAiVaultResumeWorkspaceExecutionHostId,
-  getAiVaultResumeWorkspaceTargetStatus,
-  resolveAiVaultLocalResumeRuntime
+  getAiVaultResumeWorkspaceTargetStatus
 } from '@/lib/ai-vault-resume-target'
 import { translate } from '@/i18n/i18n'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
@@ -62,7 +62,7 @@ export function resolveAiVaultSessionLaunchTarget(args: {
       sessionExecutionHostId: args.sessionExecutionHostId,
       targetStatus,
       targetExecutionHostId,
-      targetRuntime: resolveAiVaultLocalResumeRuntime(args.targetState, targetWorktreeId)
+      targetWslDistro: getAiVaultResumeWorkspaceWslDistro(args.targetState, targetWorktreeId)
     })
   ) {
     return { status: 'unsupported', targetStatus }

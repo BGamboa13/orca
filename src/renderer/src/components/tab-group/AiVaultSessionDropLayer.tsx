@@ -1,10 +1,10 @@
+import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/ai-vault-resume-shell'
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { toast } from 'sonner'
 import {
   canResumeAiVaultSessionOnTarget,
   getAiVaultResumeWorkspaceExecutionHostId,
-  getAiVaultResumeWorkspaceTargetStatus,
-  resolveAiVaultLocalResumeRuntime
+  getAiVaultResumeWorkspaceTargetStatus
 } from '@/lib/ai-vault-resume-target'
 import {
   AI_VAULT_SESSION_DRAG_END_EVENT,
@@ -202,7 +202,7 @@ export default function AiVaultSessionDropLayer({
           sessionExecutionHostId: payload.sessionExecutionHostId ?? null,
           targetStatus,
           targetExecutionHostId,
-          targetRuntime: resolveAiVaultLocalResumeRuntime(state, worktreeId)
+          targetWslDistro: getAiVaultResumeWorkspaceWslDistro(state, worktreeId)
         })
       ) {
         toast.error(

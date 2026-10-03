@@ -68,11 +68,11 @@ export default function AiVaultPanel(): React.JSX.Element {
   const projectHostSetupProjection = useProjectHostSetupProjection()
   const resumeTargetState = useAppStore(
     useShallow((state) => ({
+      projects: state.projects,
+      settings: state.settings,
       folderWorkspaces: state.folderWorkspaces,
       projectGroups: state.projectGroups,
-      projects: state.projects,
       repos: state.repos,
-      settings: state.settings,
       worktreesByRepo: state.worktreesByRepo
     }))
   )
