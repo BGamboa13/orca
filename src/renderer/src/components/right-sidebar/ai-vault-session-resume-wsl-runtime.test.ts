@@ -3,6 +3,8 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { Project } from '../../../../shared/project-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
+import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
+import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/ai-vault-resume-shell'
 import {
   type AiVaultSessionResumeTargetState,
   resolveAiVaultSessionResumeState
@@ -49,14 +51,17 @@ function makeWorktree(repoId: string, path: string): Worktree {
   }
 }
 
-function targetState(projects: Project[] = []): AiVaultSessionResumeTargetState {
+function targetState(
+  projects: Project[] = [],
+  settings = createGlobalSettingsFixture({ localWindowsRuntimeDefault: { kind: 'windows-host' } })
+): AiVaultSessionResumeTargetState {
   return {
     folderWorkspaces: [],
     projectGroups: [],
     repos,
     worktreesByRepo: Object.fromEntries(worktrees.map((worktree) => [worktree.repoId, [worktree]])),
     projects,
-    settings: createGlobalSettingsFixture({ localWindowsRuntimeDefault: { kind: 'windows-host' } })
+    settings
   }
 }
 
@@ -134,6 +139,49 @@ describe('resume across WSL and the Windows host', () => {
       }).status
     expect(resume(WSL_SESSION_FILE)).toBe('unsupported')
     expect(resume(WINDOWS_SESSION_FILE)).toBe('ready')
+  })
+
+  it('blocks transcripts while the project runtime requires repair', () => {
+    const inheritProject: Project = {
+      id: 'win',
+      displayName: 'win',
+      badgeColor: '#000000',
+      sourceRepoIds: ['win'],
+      localWindowsRuntimePreference: { kind: 'inherit-global' },
+      createdAt: 1,
+      updatedAt: 1
+    }
+    // A global WSL default without a distro leaves the project runtime repair-required.
+    const state = targetState(
+      [inheritProject],
+      createGlobalSettingsFixture({ localWindowsRuntimeDefault: { kind: 'wsl', distro: null } })
+    )
+    expect(getAiVaultResumeWorkspaceWslDistro(state, windowsWorktree.id)).toBeUndefined()
+    for (const sessionFilePath of [WINDOWS_SESSION_FILE, WSL_SESSION_FILE]) {
+      expect(
+        resolveAiVaultSessionLaunchTarget({
+          sessionFilePath,
+          activeWorktreeId: windowsWorktree.id,
+          targetState: state
+        }).status
+      ).toBe('unsupported')
+    }
+  })
+
+  it('blocks transcripts in a folder with several possible owning repos', () => {
+    const state = targetState()
+    state.folderWorkspaces = [makeFolderWorkspace({ folderPath: 'C:\\repo\\folder' })]
+    state.repos = repos.map((repo) => ({ ...repo, projectGroupId: 'group-1' }))
+    expect(getAiVaultResumeWorkspaceWslDistro(state, 'folder:folder-1')).toBeUndefined()
+    for (const sessionFilePath of [WINDOWS_SESSION_FILE, WSL_SESSION_FILE]) {
+      expect(
+        resolveAiVaultSessionLaunchTarget({
+          sessionFilePath,
+          activeWorktreeId: 'folder:folder-1',
+          targetState: state
+        }).status
+      ).toBe('unsupported')
+    }
   })
 
   it('reports a direct resume into the wrong runtime as unsupported', () => {

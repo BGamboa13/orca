@@ -45,16 +45,23 @@ const WINDOWS_DRIVE_PATH = /^[A-Za-z]:[\\/]/
  * Why: a transcript only resumes under the runtime that wrote it — a WSL-stored one inside its own distro, a
  * Windows-drive one on the Windows host (inside WSL the agent reads another home and finds nothing).
  * `targetWslDistro` follows getAiVaultResumeWorkspaceWslDistro: a distro, null for the Windows host, undefined
- * when unknown. An unknown runtime blocks nothing, as before this check.
+ * when unknown. An unknown runtime (a project that needs runtime repair, a folder with several possible repos)
+ * cannot prove either, so it blocks both, like the Antigravity reference rule.
  */
 export function isAiVaultSessionRuntimeCompatible(
   sessionFilePath: string | null | undefined,
   targetWslDistro: string | null | undefined
 ): boolean {
-  if (targetWslDistro === undefined || !sessionFilePath) {
+  if (!sessionFilePath) {
     return true
   }
   const sessionWsl = parseWslUncPath(sessionFilePath)
+  if (!sessionWsl && !WINDOWS_DRIVE_PATH.test(sessionFilePath)) {
+    return true
+  }
+  if (targetWslDistro === undefined) {
+    return false
+  }
   if (sessionWsl) {
     return (
       Boolean(targetWslDistro) && targetWslDistro?.toLowerCase() === sessionWsl.distro.toLowerCase()
